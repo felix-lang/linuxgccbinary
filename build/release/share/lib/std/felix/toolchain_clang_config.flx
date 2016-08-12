@@ -1,0 +1,12 @@
+#line 35 "/home/travis/build/felix-lang/felix/src/packages/toolchain.fdoc"
+
+typedef clang_config_t = (
+  header_search_dirs: list[string],
+  macros : list[string],
+  library_search_dirs: list[string],
+  ccflags: list[string],
+  dynamic_libraries: list[string],
+  static_libraries: list[string],
+  debugln : string -> void
+);
+

@@ -1,0 +1,5 @@
+#line 3336 "/home/travis/build/felix-lang/felix/src/packages/flx.fdoc"
+include "std/felix/flx/bootflx";
+println$ "BOOTFLX";
+System::pexit$ BootFlx::runflx #System::args;
+

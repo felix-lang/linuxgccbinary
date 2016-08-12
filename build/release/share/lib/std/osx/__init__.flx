@@ -1,0 +1,4 @@
+#line 341 "/home/travis/build/felix-lang/felix/src/packages/libstruct.fdoc"
+
+struct Osx{};
+include "std/posix/__init__";

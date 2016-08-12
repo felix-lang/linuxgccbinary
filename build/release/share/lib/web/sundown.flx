@@ -1,0 +1,6 @@
+#line 2144 "/home/travis/build/felix-lang/felix/src/packages/web.fdoc"
+//$ A Markdown to Html translator.
+class SunDown
+{
+  fun sundown: string -> string requires package "sundown";
+}

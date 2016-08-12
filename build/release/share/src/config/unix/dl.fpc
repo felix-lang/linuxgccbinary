@@ -1,0 +1,6 @@
+Generated_from: 1286 "/home/travis/build/felix-lang/felix/src/packages/dynlink.fdoc"
+Name: dl
+Description: dynamic loading support
+includes: '<dlfcn.h>'
+requires_dlibs: -ldl
+requires_slibs: -ldl

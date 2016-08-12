@@ -1,0 +1,5 @@
+#line 65 "/home/travis/build/felix-lang/felix/src/packages/debug.fdoc"
+syntax debug
+{
+   satom := "HERE" =># "`(ast_here ,_sr)";
+}
