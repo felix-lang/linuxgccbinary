@@ -1,0 +1,190 @@
+#line 9 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip writeblock[T]
+  connector io
+    pin inp : %<T
+{
+}
+
+#line 18 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip readblock[T]
+  connector io
+    pin inp: %>T
+{
+}
+
+
+#line 28 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip sink[T]
+  connector io
+    pin inp : %<T
+{
+  while true do
+    var x = read (io.inp);
+    C_hack::ignore (x);
+  done
+}
+
+#line 41 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip source[T] (a:T)
+  connector io
+    pin out: %>T
+{
+  while true do
+    write (io.out, a);
+  done
+}
+
+#line 53 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip function[D,C] (f:D->C)
+  connector io
+    pin inp: %<D
+    pin out: %>C
+{
+  while true do
+    var x = read io.inp;
+    var y = f x;
+    write (io.out, y);
+  done
+}
+
+#line 68 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip buffer [T]
+  connector io
+    pin inp: %<T
+    pin out: %>T
+{
+  while true do
+    var x = read io.inp;
+    write (io.out, x);
+  done
+}
+
+#line 82 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip debug_buffer [T with Str[T]] (tag:string)
+  connector io
+    pin inp: %<T
+    pin out: %>T
+{
+  while true do
+    var x = read io.inp;
+    println$ "Debug buffer [" + tag + "] " + x.str;
+    write (io.out, x);
+  done
+}
+
+#line 97 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip oneshot [T]
+  connector io
+    pin inp: %<T
+    pin out: %>T
+{
+  var x = read io.inp;
+  write (io.out, x);
+}
+
+#line 109 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip store[T] (p:&T)
+  connector io
+    pin inp: %<T
+{
+  while true do
+    var x = read io.inp;
+    p <- x;
+  done
+}
+
+#line 122 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip fetch[T] (p:&T)
+  connector io
+    pin out: %>T
+{
+  while true do
+    write (io.out, *p);
+  done
+}
+
+#line 135 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip debug_sink [T with Str[T]] (s:string)
+  connector io
+    pin inp: %<T
+{
+  while true do
+    var x = read io.inp;
+    println$ "Debug sink ["+s+"] "+x.str;
+  done
+}
+
+
+#line 151 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip latch[T]
+  connector io
+    pin inp: %<T
+    pin out: %>T
+{
+   var x = read io.inp;
+   device w = fetch &x;
+   device r = store &x;
+   circuit
+     wire io.inp to r.inp
+     wire io.out to w.out
+   endcircuit
+}
+
+#line 172 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip serialise_chan_list[T] (a: list[%<T])
+ connector io
+   pin out: %>T
+{
+  while true do
+    var current = a;
+next:>
+    match current with
+    | Cons (h,t) =>
+      var x = read h;
+      write (io.out, x);
+      current = t;
+      goto next;
+    | Empty => ;
+    endmatch;
+  done
+}
+
+typedef iopair_t[D,C] = (inp: %<D, out: %>C);
+typedef iochip_t[D,C] = iopair_t[D,C] -> 1 -> 0;
+
+// NOTE: this is currently a one-shot!
+chip pipeline_list[T] (a: list[iochip_t[T,T]])
+  connector io
+    pin inp: %<T
+    pin out: %>T
+{
+  proc aux (lst:list[iochip_t[T,T]]) (inp: %<T) {
+    match lst with
+    | h1 ! h2 ! tail =>
+      var inchan,outchan = mk_ioschannel_pair[T]();
+      spawn_fthread$  h1 (inp=inp, out=outchan);
+      aux (h2!tail) inchan;
+    | h1 ! _ =>
+      spawn_fthread$  h1 (inp=inp, out=io.out);
+    endmatch;
+  }
+  aux a io.inp;
+}
+
+// NOTE: this is currently a one-shot!
+chip tryall_list[D,C] (a: list[iochip_t[D,C]])
+  connector io
+    pin inp: %<D
+    pin out: %>C
+{
+  // get some input and start a source writing it
+  var x = read io.inp;
+  // now, start each device in turn, connected to
+  // the source and output
+  for h in a do
+    var lin,lout = mk_ioschannel_pair[D]();
+    spawn_fthread (h (inp=lin, out=io.out));
+    write (lout,x);
+  done
+}
+
