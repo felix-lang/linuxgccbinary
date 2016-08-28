@@ -1,4 +1,4 @@
-#line 3322 "/home/travis/build/felix-lang/felix/src/packages/flx.fdoc"
+#line 3327 "/home/travis/build/felix-lang/felix/src/packages/flx.fdoc"
 class Flx_client {
   var runflx : list[string] -> int;
   proc setup ()

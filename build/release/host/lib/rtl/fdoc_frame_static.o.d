@@ -4,7 +4,7 @@
 /home/travis/build/felix-lang/felix/build/release/share/lib/rtl/flx_rtl.hpp
 /home/travis/build/felix-lang/felix/build/release/share/lib/rtl/flx_rtl_config.hpp
 /home/travis/build/felix-lang/felix/build/release/share/lib/rtl/flx_rtl_config.h
-/home/travis/build/felix-lang/felix/build/release/host/lib/rtl/flx_rtl_config_params.hpp
+/home/travis/build/felix-lang/felix/build/release/trial/lib/rtl/flx_rtl_config_params.hpp
 /home/travis/build/felix-lang/felix/build/release/share/lib/rtl/flx_exceptions.hpp
 /home/travis/build/felix-lang/felix/build/release/share/lib/rtl/flx_exceptions_config.hpp
 /home/travis/build/felix-lang/felix/build/release/share/lib/rtl/flx_gc.hpp

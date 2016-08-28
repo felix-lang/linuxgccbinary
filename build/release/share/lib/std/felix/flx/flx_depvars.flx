@@ -1,4 +1,4 @@
-#line 1664 "/home/travis/build/felix-lang/felix/src/packages/flx.fdoc"
+#line 1665 "/home/travis/build/felix-lang/felix/src/packages/flx.fdoc"
 include "std/felix/flx/flx_control";
 
 class FlxDepvars
