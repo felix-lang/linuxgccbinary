@@ -20,7 +20,7 @@
 #define FLX_HAVE_POLL 1
 #define FLX_HAVE_EPOLL 1
 #define FLX_HAVE_EVTPORTS 0
-#define FLX_HAVE_OPENMP 1
+#define FLX_HAVE_OPENMP 0
 #define FLX_MAX_ALIGN 16
 
 #endif
