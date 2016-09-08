@@ -1,4 +1,4 @@
-#line 3409 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
+#line 3412 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
 syntax macros {
   requires expressions, statements, list;
 
