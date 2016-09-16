@@ -1,4 +1,4 @@
-#line 245 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 268 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 struct Buffer
 {
   sp: StringPiece;
@@ -31,7 +31,7 @@ instance Str[Buffer] {
   fun str (b:Buffer) => "@"+b.pos.str;
 }
 
-#line 280 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 303 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_string (s:string)
   connector io
     pin inp: %<Buffer
@@ -47,7 +47,7 @@ nextmatch:>
   goto nextmatch;
 }
 
-#line 297 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 320 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_white
   connector io
     pin inp: %<Buffer
@@ -60,7 +60,7 @@ chip match_white
   done
 }
 
-#line 312 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 335 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_regex (r:RE2)
   connector io
     pin inp: %<Buffer
@@ -81,38 +81,40 @@ chip match_regex (r:RE2)
   done
 }
 
-#line 336 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 359 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 device cident_matcher = match_regex (RE2 "[A-Za-z][A-Za-z0-9_]*");
 
-#line 342 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 365 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 device decimal_integer_matcher = match_regex (RE2 "[0-9]+");
 
-#line 348 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 371 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_string_literal
   connector io
     pin inp: %<Buffer
     pin out: %>Buffer
 {
+restart:>
   var b = read io.inp;
-  if b.atend return; // end of data
+  if b.atend goto restart; // end of data
   var leadin = b.get;
 //println$ "string literal matcher got char " + leadin.str;
-  if not (leadin in (char '"', char "'")) return;
+  if not (leadin in (char '"', char "'")) goto restart;
 //println$ "Got valid string start .. ";
   b&.next;
-  if b.atend return;
+  if b.atend goto restart;
   var ch = b.get;
   while ch != leadin do
     b&.next;
-    if b.atend return;
+    if b.atend goto restart;
     ch = b.get;
-    if ch == char "\n" return; // end of line
+    if ch == char "\n" goto restart; // end of line
   done
   b&.next;
   io.out `write` b;
+  goto restart;
 }
 
-#line 379 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 419 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 typedef pardat_t[T] = Buffer * T;
 
 chip leaf_capture[T]
@@ -124,37 +126,42 @@ chip leaf_capture[T]
     pin inp: %<pardat_t[T]
     pin out: %>pardat_t[T]
 {
-  var b,pd = read io.inp;
-  var rin,win= mk_ioschannel_pair[Buffer]();
-  var rout,wout= mk_ioschannel_pair[Buffer]();
-  spawn_fthread (scan (inp=rin,out=wout));
-  write(win,b);
-  var b2 = read rout;
-  var s = newstate ((b,pd),b2);
-  write (io.out,s);
+while true do
+  var x = read io.inp;
+  noinline proc handler (var x: pardat_t[T]) () {
+    var b,pd = x;
+    var rin,win= mk_ioschannel_pair[Buffer]();
+    var rout,wout= mk_ioschannel_pair[Buffer]();
+    spawn_fthread (scan (inp=rin,out=wout));
+    write(win,b);
+    var b2 = read rout; // this can block forever if scan fails
+    var s = newstate ((b,pd),b2);
+    write (io.out,s);
+  }
+  var y = handler x;
+  spawn_fthread y;
+done
 }
 
 
 
-#line 411 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 454 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip optional (p:iochip_t[Buffer,Buffer])
   connector io
     pin inp: %<Buffer
     pin out: %>Buffer
 {
-  var b = read io.inp;
-  device src = source b;
-  device both = tryall_list (
-    pipeline_list (oneshot[Buffer],p).list,
-    pipeline_list (oneshot[Buffer], debug_buffer[Buffer] "Epsilon").list
-  ).list;
+  device both = tryall_list ([
+    p,
+    debug_buffer[Buffer] "Epsilon"
+  ]);
   circuit
-    connect src.out, both.inp
+    wire io.inp to both.inp
     wire io.out to both.out
   endcircuit
 }
 
-#line 430 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 471 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 
 chip oneormore_matcher (A:iochip_t[Buffer,Buffer])
 connector chans
@@ -170,7 +177,7 @@ connector chans
  endcircuit
 }
 
-#line 447 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 488 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 
 union symbol_t =
   | Terminal of string

@@ -6,7 +6,6 @@ chip writeblock[T]
 }
 
 #line 18 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
-  union lsexpr[T,L] = | Leaf of T | Tree of L * list[lsexpr[T,L]];
 chip readblock[T]
   connector io
     pin inp: %>T
@@ -14,7 +13,7 @@ chip readblock[T]
 }
 
 
-#line 29 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 28 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip sink[T]
   connector io
     pin inp : %<T
@@ -25,7 +24,7 @@ chip sink[T]
   done
 }
 
-#line 42 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 41 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip source[T] (a:T)
   connector io
     pin out: %>T
@@ -35,7 +34,15 @@ chip source[T] (a:T)
   done
 }
 
-#line 54 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 52 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip source_from_list[T] (a:list[T])
+  connector io
+    pin out: %>T
+{
+  for y in a perform write (io.out,y);
+}
+
+#line 62 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip function[D,C] (f:D->C)
   connector io
     pin inp: %<D
@@ -48,7 +55,7 @@ chip function[D,C] (f:D->C)
   done
 }
 
-#line 69 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 77 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip buffer [T]
   connector io
     pin inp: %<T
@@ -60,20 +67,22 @@ chip buffer [T]
   done
 }
 
-#line 83 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 91 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip debug_buffer [T with Str[T]] (tag:string)
   connector io
     pin inp: %<T
     pin out: %>T
 {
   while true do
+    println$ "Debug buffer [" + tag + "] READ";
     var x = read io.inp;
-    println$ "Debug buffer [" + tag + "] " + x.str;
+    println$ "Debug buffer [" + tag + "] read " + x.str;
     write (io.out, x);
+    println$ "Debug buffer [" + tag + "] written " + x.str;
   done
 }
 
-#line 98 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 108 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip oneshot [T]
   connector io
     pin inp: %<T
@@ -83,7 +92,7 @@ chip oneshot [T]
   write (io.out, x);
 }
 
-#line 110 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 120 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip store[T] (p:&T)
   connector io
     pin inp: %<T
@@ -94,7 +103,7 @@ chip store[T] (p:&T)
   done
 }
 
-#line 123 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 133 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip fetch[T] (p:&T)
   connector io
     pin out: %>T
@@ -104,7 +113,7 @@ chip fetch[T] (p:&T)
   done
 }
 
-#line 136 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 146 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip debug_sink [T with Str[T]] (s:string)
   connector io
     pin inp: %<T
@@ -116,7 +125,7 @@ chip debug_sink [T with Str[T]] (s:string)
 }
 
 
-#line 152 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 162 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip latch[T]
   connector io
     pin inp: %<T
@@ -131,7 +140,7 @@ chip latch[T]
    endcircuit
 }
 
-#line 173 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 183 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip serialise_chan_list[T] (a: list[%<T])
  connector io
    pin out: %>T
@@ -154,6 +163,14 @@ typedef iopair_t[D,C] = (inp: %<D, out: %>C);
 typedef iochip_t[D,C] = iopair_t[D,C] -> 1 -> 0;
 
 // NOTE: this is currently a one-shot!
+// .. Well sort of!
+// It can do multiple reads if its first chip
+// cycles. If the pipeline drops dead, it will
+// not be reuable.
+//
+// To be reusable, components should not return,
+// instead loop back to reading without writing.
+
 chip pipeline_list[T] (a: list[iochip_t[T,T]])
   connector io
     pin inp: %<T
@@ -172,27 +189,32 @@ chip pipeline_list[T] (a: list[iochip_t[T,T]])
   aux a io.inp;
 }
 
-// NOTE: this is currently a one-shot!
+// This loops, but only by repeatedly spawning
+// the alternative set. The alternatives are restricted
+// to a single read on each iteration. The chips are
+// respawned because they might be locked up, in which
+// case the whole thing locks up.
+//
+// NOTE: if one of the alternatives starts, and does not
+// read the input, everything locks up. This is because
+// the implementation ACTUALLY progresses serially.
+//
+// this COULD be fixed by adding a buffer to the front of
+// each. Actually better, add a one shot source based
+// on the input.
 chip tryall_list[D,C with Str[D]] (a: list[iochip_t[D,C]])
   connector io
     pin inp: %<D
     pin out: %>C
 {
-  // get some input and start a source writing it
-//println$ "Try all, reading value";
-  var x = read io.inp;
-//println$ "Try all, got value " + x.str;
-  // now, start each device in turn, connected to
-  // the source and output
-//println$ "Try all writing to " + a.len.str " chips";
-var n = 0;
-  for h in a do
-//println$ "Tryall, making channels and spawning fibre #"+n.str;
-    var lin,lout = mk_ioschannel_pair[D]();
-    spawn_fthread (h (inp=lin, out=io.out));
-//println$ "Tryall, writing value to fibre";
-    write (lout,x);
-    ++n;
+  while true do
+    var x = read io.inp;
+//println$ "Tryall read " + x.str;
+    for h in a do
+      var lin,lout = mk_ioschannel_pair[D]();
+      spawn_fthread (h (inp=lin, out=io.out));
+      write (lout,x);
+    done
   done
 }
 
