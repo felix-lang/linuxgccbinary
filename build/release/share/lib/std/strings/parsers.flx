@@ -31,7 +31,13 @@ instance Str[Buffer] {
   fun str (b:Buffer) => "@"+b.pos.str;
 }
 
-#line 303 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+// hack, ignore underlying data.. FIXME
+instance Eq[Buffer] {
+  fun == (a:Buffer, b:Buffer) => a.pos == b.pos;
+}
+
+
+#line 309 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_string (s:string)
   connector io
     pin inp: %<Buffer
@@ -47,7 +53,7 @@ nextmatch:>
   goto nextmatch;
 }
 
-#line 320 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 326 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_white
   connector io
     pin inp: %<Buffer
@@ -60,7 +66,7 @@ chip match_white
   done
 }
 
-#line 335 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 341 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_regex (r:RE2)
   connector io
     pin inp: %<Buffer
@@ -81,13 +87,13 @@ chip match_regex (r:RE2)
   done
 }
 
-#line 359 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 365 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 device cident_matcher = match_regex (RE2 "[A-Za-z][A-Za-z0-9_]*");
 
-#line 365 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 371 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 device decimal_integer_matcher = match_regex (RE2 "[0-9]+");
 
-#line 371 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 377 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_string_literal
   connector io
     pin inp: %<Buffer
@@ -114,7 +120,7 @@ restart:>
   goto restart;
 }
 
-#line 419 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 425 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 typedef pardat_t[T] = Buffer * T;
 
 chip leaf_capture[T]
@@ -145,7 +151,7 @@ done
 
 
 
-#line 454 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 460 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip optional (p:iochip_t[Buffer,Buffer])
   connector io
     pin inp: %<Buffer
@@ -161,7 +167,7 @@ chip optional (p:iochip_t[Buffer,Buffer])
   endcircuit
 }
 
-#line 471 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 477 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 
 chip oneormore_matcher (A:iochip_t[Buffer,Buffer])
 connector chans
@@ -177,7 +183,7 @@ connector chans
  endcircuit
 }
 
-#line 488 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 494 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 
 union symbol_t =
   | Terminal of string
