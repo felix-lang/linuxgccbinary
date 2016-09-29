@@ -9,6 +9,7 @@ std/datatype/listexpr.fsyn
 std/datatype/tupleexpr.fsyn
 std/strings/stringexpr.fsyn
 std/strings/regexps.fsyn
+std/strings/parsers.fsyn
 std/scalar/boolexpr.fsyn
 std/algebra/pordcmpexpr.fsyn
 std/algebra/addexpr.fsyn

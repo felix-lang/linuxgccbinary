@@ -1,11 +1,11 @@
-#line 9 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 10 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip writeblock[T]
   connector io
     pin inp : %<T
 {
 }
 
-#line 18 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 19 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip readblock[T]
   connector io
     pin inp: %>T
@@ -13,7 +13,7 @@ chip readblock[T]
 }
 
 
-#line 28 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 29 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip sink[T]
   connector io
     pin inp : %<T
@@ -24,7 +24,7 @@ chip sink[T]
   done
 }
 
-#line 41 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 42 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip source[T] (a:T)
   connector io
     pin out: %>T
@@ -34,7 +34,7 @@ chip source[T] (a:T)
   done
 }
 
-#line 52 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 53 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip source_from_list[T] (a:list[T])
   connector io
     pin out: %>T
@@ -42,7 +42,7 @@ chip source_from_list[T] (a:list[T])
   for y in a perform write (io.out,y);
 }
 
-#line 62 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 63 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip function[D,C] (f:D->C)
   connector io
     pin inp: %<D
@@ -55,7 +55,7 @@ chip function[D,C] (f:D->C)
   done
 }
 
-#line 77 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 78 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip buffer [T]
   connector io
     pin inp: %<T
@@ -67,7 +67,7 @@ chip buffer [T]
   done
 }
 
-#line 91 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 92 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip debug_buffer [T with Str[T]] (tag:string)
   connector io
     pin inp: %<T
@@ -82,7 +82,7 @@ chip debug_buffer [T with Str[T]] (tag:string)
   done
 }
 
-#line 108 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 109 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip oneshot [T]
   connector io
     pin inp: %<T
@@ -92,7 +92,7 @@ chip oneshot [T]
   write (io.out, x);
 }
 
-#line 120 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 121 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip store[T] (p:&T)
   connector io
     pin inp: %<T
@@ -103,7 +103,7 @@ chip store[T] (p:&T)
   done
 }
 
-#line 133 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 134 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip fetch[T] (p:&T)
   connector io
     pin out: %>T
@@ -113,7 +113,7 @@ chip fetch[T] (p:&T)
   done
 }
 
-#line 146 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 147 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip debug_sink [T with Str[T]] (s:string)
   connector io
     pin inp: %<T
@@ -125,7 +125,7 @@ chip debug_sink [T with Str[T]] (s:string)
 }
 
 
-#line 162 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 163 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip latch[T]
   connector io
     pin inp: %<T
@@ -140,7 +140,7 @@ chip latch[T]
    endcircuit
 }
 
-#line 183 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 184 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip serialise_chan_list[T] (a: list[%<T])
  connector io
    pin out: %>T

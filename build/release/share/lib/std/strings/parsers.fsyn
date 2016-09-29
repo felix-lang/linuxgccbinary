@@ -1,0 +1,75 @@
+#line 573 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+
+syntax parsers {
+  priority
+    palt_pri <
+    pseq_pri <
+    ppostfix_pri <
+    patom_pri
+  ;
+
+  //$ Define a non-terminal
+  stmt := "parser" sdeclname "=" sparser[palt_pri] ";" =>#
+    """
+    `(ast_val_decl ,_sr ,(first _2) ,(second _2) none (some ,_4))
+    """;
+
+  //$ Inline regular expression.
+  //$ Can be used anywhere in Felix code.
+  //$ Returns a a value of type Regdef::regex.
+  x[sapplication_pri] := "parse" "(" sparser[palt_pri] ")" =># "_3";
+
+  //$ Alternatives.
+  private sparser[palt_pri] := sparser[>palt_pri] ("|" sparser[>palt_pri])+ =>#
+    """`(ast_apply ,_sr ( ,(noi 'tryall_list)
+      (ast_apply ,_sr (,(noi 'list) ,(cons _1 (map second _2))))))"""
+  ;
+
+  //$ Sequential concatenation.
+  private sparser[pseq_pri] := sparser[>pseq_pri] (sparser[>pseq_pri])+ =>#
+    """`(ast_apply ,_sr ( ,(noi 'pipeline_list)
+      (ast_apply ,_sr (,(noi 'list) ,(cons _1 _2)))))"""
+  ;
+
+
+  //$ Postfix star (*).
+  //$ Kleene closure: zero or more repetitions.
+  private sparser[ppostfix_pri] := sparser[ppostfix_pri] "*" =>#
+    """`(ast_apply ,_sr ( ,(noi 'zeroormore_matcher) ,_1 ))"""
+  ;
+
+  //$ Postfix plus (+).
+  //$ One or more repetitions.
+  private sparser[ppostfix_pri] := sparser[ppostfix_pri] "+" =>#
+    """`(ast_apply ,_sr ( ,(noi 'oneormore_matcher) ,_1 ))"""
+  ;
+
+  //$ Postfix question mark (?).
+  //$ Optional. Zero or one repetitions.
+  private sparser[ppostfix_pri] := sparser[ppostfix_pri] "?" =>#
+    """`(ast_apply ,_sr (,(noi 'optional) ,_1 ))"""
+  ;
+
+  //$ Group psuedo function.
+  private sparser[patom_pri] := "(" sparser[palt_pri] ")" =># '_2';
+
+  //$ The string literal.
+  //$ The given sequence of characters.
+  //$ Any valid Felix string can be used here.
+  private sparser[patom_pri] := String =>#
+    """`(ast_apply ,_sr ( ,(noi 'string_parser) ,_1)) """
+  ;
+
+  //$ The regex psuedo function.
+  //$ Treat the argument Felix expression of type Regdef::regex
+  //$ as a regular expression.
+  private sparser[patom_pri] :=  "{" sexpr "}" =># "_2";
+
+  //$ Identifier.
+  //$ Must name a previously defined variable of type Regdef:;regex.
+  //$ For example, the LHS of a regdef binder.
+  private sparser[patom_pri] := sname=># "`(ast_name ,_sr ,_1 ())";
+
+}
+
+

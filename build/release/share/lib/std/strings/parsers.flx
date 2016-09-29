@@ -1,4 +1,4 @@
-#line 268 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 269 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 struct Buffer
 {
   sp: StringPiece;
@@ -36,8 +36,52 @@ instance Eq[Buffer] {
   fun == (a:Buffer, b:Buffer) => a.pos == b.pos;
 }
 
-
 #line 309 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+
+///////////////////// capture pipeline lsexpr
+include "std/datatype/lsexpr";
+
+typedef lsexpr_t = LS_expr::lsexpr[string,string];
+instance Str[lsexpr_t] {
+  fun str (x:lsexpr_t) =>
+     match x with
+      | Leaf a => str a
+      | Tree (a,b) => str a + "(" + str b  + ")"
+    ;
+}
+open Str[lsexpr_t];
+
+instance Eq[lsexpr_t] {
+  fun ==: lsexpr_t * lsexpr_t -> bool=
+  | Leaf a, Leaf b => a == b
+  | Tree (a,x), Tree (b,y) => a == b and x == y
+  ;
+}
+
+typedef ll_t = list[lsexpr_t];
+
+// parser SHIFT action
+gen push_entry (first: Buffer * ll_t, last: Buffer) : Buffer * ll_t =
+{
+   var lst = first.1;
+   var b0 = first.0;
+   var sp = b0.sp;
+   var s = sp.string;
+   var p0 = b0.pos;
+   var p1 = last.pos;
+   var lexeme = sp.[p0..<p1].string;
+   //println$ "Lexeme = '" + lexeme+"'";
+   var entry = LS_expr::Leaf[string,string] lexeme;
+   var newstate = Cons (entry, lst);
+   return last, newstate;
+}
+
+gen skip_entry (first: Buffer * ll_t, last: Buffer) : Buffer * ll_t =
+{
+  return last, first.1;
+}
+
+#line 356 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_string (s:string)
   connector io
     pin inp: %<Buffer
@@ -53,7 +97,7 @@ nextmatch:>
   goto nextmatch;
 }
 
-#line 326 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 373 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_white
   connector io
     pin inp: %<Buffer
@@ -66,7 +110,7 @@ chip match_white
   done
 }
 
-#line 341 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 388 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_regex (r:RE2)
   connector io
     pin inp: %<Buffer
@@ -87,13 +131,13 @@ chip match_regex (r:RE2)
   done
 }
 
-#line 365 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 412 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 device cident_matcher = match_regex (RE2 "[A-Za-z][A-Za-z0-9_]*");
 
-#line 371 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 418 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 device decimal_integer_matcher = match_regex (RE2 "[0-9]+");
 
-#line 377 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 424 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_string_literal
   connector io
     pin inp: %<Buffer
@@ -120,24 +164,24 @@ restart:>
   goto restart;
 }
 
-#line 425 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
-typedef pardat_t[T] = Buffer * T;
+#line 472 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+typedef pardat_t[B,T] = B * T;
 
-chip leaf_capture[T]
+chip leaf_capture[B,T]
   (
-    scan: iochip_t[Buffer,Buffer],
-    newstate: pardat_t[T] * Buffer -> pardat_t[T]
+    scan: iochip_t[B,B],
+    newstate: pardat_t[B,T] * B -> pardat_t[B,T]
   )
   connector io
-    pin inp: %<pardat_t[T]
-    pin out: %>pardat_t[T]
+    pin inp: %<pardat_t[B,T]
+    pin out: %>pardat_t[B,T]
 {
 while true do
   var x = read io.inp;
-  noinline proc handler (var x: pardat_t[T]) () {
+  noinline proc handler (var x: pardat_t[B,T]) () {
     var b,pd = x;
-    var rin,win= mk_ioschannel_pair[Buffer]();
-    var rout,wout= mk_ioschannel_pair[Buffer]();
+    var rin,win= mk_ioschannel_pair[B]();
+    var rout,wout= mk_ioschannel_pair[B]();
     spawn_fthread (scan (inp=rin,out=wout));
     write(win,b);
     var b2 = read rout; // this can block forever if scan fails
@@ -149,17 +193,30 @@ while true do
 done
 }
 
+fun string_parser (s:string) =>
+  leaf_capture (match_string s,push_entry)
+;
 
-
-#line 460 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
-chip optional (p:iochip_t[Buffer,Buffer])
+#line 508 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip epsilon[T]
   connector io
-    pin inp: %<Buffer
-    pin out: %>Buffer
+   pin inp: %<T
+   pin out: %>T
+{
+  while true do
+    var x = read io.inp;
+    write (io.out, x);
+  done
+}
+#line 523 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip optional[T] (p:iochip_t[T,T])
+  connector io
+    pin inp: %<T
+    pin out: %>T
 {
   device both = tryall_list ([
     p,
-    debug_buffer[Buffer] "Epsilon"
+    epsilon[T]
   ]);
   circuit
     wire io.inp to both.inp
@@ -167,12 +224,12 @@ chip optional (p:iochip_t[Buffer,Buffer])
   endcircuit
 }
 
-#line 477 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 540 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 
-chip oneormore_matcher (A:iochip_t[Buffer,Buffer])
+chip oneormore_matcher[T] (A:iochip_t[T,T])
 connector chans
-  pin inp: %<Buffer
-  pin out: %>Buffer
+  pin inp: %<T
+  pin out: %>T
 {
  device As = oneormore_matcher A;
  device As2 = pipeline_list (A,As).list;
@@ -183,23 +240,18 @@ connector chans
  endcircuit
 }
 
-#line 494 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 557 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 
-union symbol_t =
-  | Terminal of string
-  | Nonterminal of string
-;
-
-typedef production_t = list[symbol_t];
-typedef alternatives_t = list[production_t];
-
-typedef grammar_t = (start:string, strdict[alternatives_t]);
-
-chip parse_simple_grammar
-  connector io
-    pin inp: %<string
-    pin out: %>grammar_t
+chip zeroormore_matcher[T] (A:iochip_t[T,T])
+connector chans
+  pin inp: %<T
+  pin out: %>T
 {
+ device As = oneormore_matcher A;
+ device Ass = tryall_list (epsilon[T], As).list;
+ circuit
+   wire chans.inp to Ass.inp
+   wire chans.out to Ass.out
+ endcircuit
 }
-
 
