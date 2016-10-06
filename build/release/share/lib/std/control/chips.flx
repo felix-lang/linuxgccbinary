@@ -218,3 +218,32 @@ chip tryall_list[D,C with Str[D]] (a: list[iochip_t[D,C]])
   done
 }
 
+#line 265 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip deref_each_read[D,C] (p:&iochip_t[D,C])
+  connector io
+    pin inp: %<D
+    pin out: %>C
+{
+  while true do
+    var x = read io.inp;
+    var rinp,rout = mk_ioschannel_pair[D]();
+    spawn_fthread ((*p) (inp=rinp, out=io.out));
+    write (rout,x);
+  done
+}
+
+chip deref_first_read[D,C] (p:&iochip_t[D,C])
+  connector io
+    pin inp: %<D
+    pin out: %>C
+{
+  var x = read io.inp;
+  var rinp,rout = mk_ioschannel_pair[D]();
+  spawn_fthread ((*p) (inp=rinp, out=io.out));
+  write (rout,x);
+  while true do
+    x = read io.inp;
+    write (rout,x);
+  done
+}
+

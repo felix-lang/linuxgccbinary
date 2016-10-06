@@ -1,4 +1,4 @@
-#line 269 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 301 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 struct Buffer
 {
   sp: StringPiece;
@@ -36,7 +36,7 @@ instance Eq[Buffer] {
   fun == (a:Buffer, b:Buffer) => a.pos == b.pos;
 }
 
-#line 309 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 341 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 
 ///////////////////// capture pipeline lsexpr
 include "std/datatype/lsexpr";
@@ -46,7 +46,7 @@ instance Str[lsexpr_t] {
   fun str (x:lsexpr_t) =>
      match x with
       | Leaf a => str a
-      | Tree (a,b) => str a + "(" + str b  + ")"
+      | Tree (a,b) => str a + "(" + List::catmap ","  (str of lsexpr_t) b  + ")"
     ;
 }
 open Str[lsexpr_t];
@@ -81,7 +81,7 @@ gen skip_entry (first: Buffer * ll_t, last: Buffer) : Buffer * ll_t =
   return last, first.1;
 }
 
-#line 356 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 388 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_string (s:string)
   connector io
     pin inp: %<Buffer
@@ -97,7 +97,7 @@ nextmatch:>
   goto nextmatch;
 }
 
-#line 373 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 405 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_white
   connector io
     pin inp: %<Buffer
@@ -110,7 +110,7 @@ chip match_white
   done
 }
 
-#line 388 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 420 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_regex (r:RE2)
   connector io
     pin inp: %<Buffer
@@ -131,13 +131,13 @@ chip match_regex (r:RE2)
   done
 }
 
-#line 412 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 444 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 device cident_matcher = match_regex (RE2 "[A-Za-z][A-Za-z0-9_]*");
 
-#line 418 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 450 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 device decimal_integer_matcher = match_regex (RE2 "[0-9]+");
 
-#line 424 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 456 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip match_string_literal
   connector io
     pin inp: %<Buffer
@@ -164,7 +164,34 @@ restart:>
   goto restart;
 }
 
-#line 472 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+chip match_string_literal_backquote
+  connector io
+    pin inp: %<Buffer
+    pin out: %>Buffer
+{
+restart:>
+  var b = read io.inp;
+  if b.atend goto restart; // end of data
+  var leadin = b.get;
+//println$ "string literal matcher got char " + leadin.str;
+  if leadin != char '`' goto restart;
+//println$ "Got valid string start .. ";
+  b&.next;
+  if b.atend goto restart;
+  var ch = b.get;
+  while ch != leadin do
+    b&.next;
+    if b.atend goto restart;
+    ch = b.get;
+    if ch == char "\n" goto restart; // end of line
+  done
+  b&.next;
+  io.out `write` b;
+  goto restart;
+}
+
+
+#line 531 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 typedef pardat_t[B,T] = B * T;
 
 chip leaf_capture[B,T]
@@ -197,7 +224,7 @@ fun string_parser (s:string) =>
   leaf_capture (match_string s,push_entry)
 ;
 
-#line 508 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 567 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip epsilon[T]
   connector io
    pin inp: %<T
@@ -208,7 +235,7 @@ chip epsilon[T]
     write (io.out, x);
   done
 }
-#line 523 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 582 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 chip optional[T] (p:iochip_t[T,T])
   connector io
     pin inp: %<T
@@ -224,7 +251,7 @@ chip optional[T] (p:iochip_t[T,T])
   endcircuit
 }
 
-#line 540 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 599 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 
 chip oneormore_matcher[T] (A:iochip_t[T,T])
 connector chans
@@ -240,7 +267,7 @@ connector chans
  endcircuit
 }
 
-#line 557 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 616 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 
 chip zeroormore_matcher[T] (A:iochip_t[T,T])
 connector chans

@@ -1,4 +1,4 @@
-#line 573 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 632 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
 
 syntax parsers {
   priority
@@ -11,8 +11,15 @@ syntax parsers {
   //$ Define a non-terminal
   stmt := "parser" sdeclname "=" sparser[palt_pri] ";" =>#
     """
-    `(ast_val_decl ,_sr ,(first _2) ,(second _2) none (some ,_4))
+    `(ast_var_decl ,_sr ,(first _2) ,(second _2) none (some ,_4))
     """;
+
+  //$ Define a non-terminal
+  stmt := "parser" sdeclname ":" stypeexpr "=" sparser[palt_pri] ";" =>#
+    """
+    `(ast_var_decl ,_sr ,(first _2) ,(second _2) (some ,_4) (some ,_6))
+    """;
+
 
   //$ Inline regular expression.
   //$ Can be used anywhere in Felix code.
@@ -60,15 +67,21 @@ syntax parsers {
     """`(ast_apply ,_sr ( ,(noi 'string_parser) ,_1)) """
   ;
 
-  //$ The regex psuedo function.
-  //$ Treat the argument Felix expression of type Regdef::regex
-  //$ as a regular expression.
   private sparser[patom_pri] :=  "{" sexpr "}" =># "_2";
 
   //$ Identifier.
-  //$ Must name a previously defined variable of type Regdef:;regex.
-  //$ For example, the LHS of a regdef binder.
   private sparser[patom_pri] := sname=># "`(ast_name ,_sr ,_1 ())";
+
+  //$ Indirection
+  //$ For example, the LHS of a regdef binder.
+  private sparser[patom_pri] := "&" sname=># """
+    `(ast_apply ,_sr
+      (
+        ,(noi 'deref_first_read)
+        (ast_ref ,_sr ,(nos _2))
+      )
+    )
+  """;
 
 }
 
