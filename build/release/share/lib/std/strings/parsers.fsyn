@@ -1,4 +1,4 @@
-#line 632 "/home/travis/build/felix-lang/felix/src/packages/chips.fdoc"
+#line 110 "/home/travis/build/felix-lang/felix/src/packages/parsers.fdoc"
 
 syntax parsers {
   priority

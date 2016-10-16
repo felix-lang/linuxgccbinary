@@ -1,4 +1,4 @@
-#line 3857 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
+#line 3836 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
 //$ Syntax to express and provide dependencies.
 //$
 //$ Requirements operate as extensions to the usual

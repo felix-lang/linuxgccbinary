@@ -1,4 +1,4 @@
-#line 3429 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
+#line 3408 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
 //$ Felix namespace control.
 syntax namespaces {
   requires statements;
