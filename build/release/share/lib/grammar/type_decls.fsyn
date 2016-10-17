@@ -1,4 +1,4 @@
-#line 4545 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
+#line 4546 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
 //$ Stuff for defining types.
 //$
 //$ Felix type expressions use the same syntax as value expressions.
