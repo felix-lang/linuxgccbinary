@@ -1,4 +1,4 @@
-#line 1150 "/home/travis/build/felix-lang/felix/src/packages/arrays.fdoc"
+#line 1153 "/home/travis/build/felix-lang/felix/src/packages/arrays.fdoc"
 
 //$ Unbounded sparse psuedo-array sarray.
 //$ This data type is not a real array because it has no bounds

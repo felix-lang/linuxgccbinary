@@ -1,4 +1,4 @@
-#line 2300 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
+#line 2301 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
 syntax global_regdefs {
   /* ====================== REGULAR DEFINITIONS ============================ */
   /* special characters */
