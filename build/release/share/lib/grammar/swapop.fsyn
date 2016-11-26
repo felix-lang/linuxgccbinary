@@ -1,4 +1,4 @@
-#line 151 "/home/travis/build/felix-lang/felix/src/packages/control.fdoc"
+#line 163 "/home/travis/build/felix-lang/felix/src/packages/control.fdoc"
 syntax swapop
 {
   sswapop := "<->" =># "'_swap";
