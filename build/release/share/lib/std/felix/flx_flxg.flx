@@ -1,4 +1,4 @@
-#line 302 "/home/travis/build/felix-lang/felix/src/packages/flx.fdoc"
+#line 303 "/home/travis/build/felix-lang/felix/src/packages/flx.fdoc"
 class Flxg
 {
   typedef flxg_spec_t =

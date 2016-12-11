@@ -1,4 +1,4 @@
-#line 79 "/home/travis/build/felix-lang/felix/src/packages/flx.fdoc"
+#line 80 "/home/travis/build/felix-lang/felix/src/packages/flx.fdoc"
 class FlxCache
 {
   fun gramtime(debugln: string -> 0) (path:string, s:string) : double = {

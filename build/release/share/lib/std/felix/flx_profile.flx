@@ -1,4 +1,4 @@
-#line 385 "/home/travis/build/felix-lang/felix/src/packages/flx.fdoc"
+#line 386 "/home/travis/build/felix-lang/felix/src/packages/flx.fdoc"
 class FlxProfile
 {
   fun dflt_profile () =

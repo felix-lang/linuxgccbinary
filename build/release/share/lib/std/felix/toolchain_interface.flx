@@ -1,4 +1,4 @@
-#line 48 "/home/travis/build/felix-lang/felix/src/packages/toolchain.fdoc"
+#line 49 "/home/travis/build/felix-lang/felix/src/packages/toolchain.fdoc"
 interface toolchain_t {
   whatami : 1 -> string;
   host_os : 1 -> string;

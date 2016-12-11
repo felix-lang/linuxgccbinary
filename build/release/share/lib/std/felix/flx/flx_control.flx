@@ -1,4 +1,4 @@
-#line 623 "/home/travis/build/felix-lang/felix/src/packages/flx.fdoc"
+#line 624 "/home/travis/build/felix-lang/felix/src/packages/flx.fdoc"
 class FlxControl
 {
 proc print_options(control:control_type) {
