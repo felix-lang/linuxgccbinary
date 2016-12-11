@@ -1,4 +1,4 @@
-#line 2267 "/home/travis/build/felix-lang/felix/src/packages/toolchain.fdoc"
+#line 2266 "/home/travis/build/felix-lang/felix/src/packages/toolchain.fdoc"
 include "std/felix/toolchain/gcc_osx";
 
 export fun toolchain_gcc_osx of (clang_config_t) as "toolchain_gcc_osx";
