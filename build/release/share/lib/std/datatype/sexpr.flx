@@ -1,4 +1,4 @@
-#line 1107 "/home/travis/build/felix-lang/felix/src/packages/lists.fdoc"
+#line 1127 "/home/travis/build/felix-lang/felix/src/packages/lists.fdoc"
 class S_expr
 {
   union sexpr[T] = Leaf of T | Tree of list[sexpr[T]];
