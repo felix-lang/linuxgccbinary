@@ -1,4 +1,4 @@
-#line 1171 "/home/travis/build/felix-lang/felix/src/packages/lists.fdoc"
+#line 1195 "/home/travis/build/felix-lang/felix/src/packages/lists.fdoc"
 class LS_expr
 {
   union lsexpr[T,L] = | Leaf of T | Tree of L * list[lsexpr[T,L]];

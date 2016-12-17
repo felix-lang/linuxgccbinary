@@ -1,4 +1,4 @@
-#line 708 "/home/travis/build/felix-lang/felix/src/packages/lists.fdoc"
+#line 732 "/home/travis/build/felix-lang/felix/src/packages/lists.fdoc"
 open class Assoc_list
 {
   typedef assoc_list[A,B] = List::list[A*B];
