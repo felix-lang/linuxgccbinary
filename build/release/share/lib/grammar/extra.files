@@ -3,6 +3,7 @@ std/control/exceptions.fsyn
 std/scalar/boolexpr.fsyn
 std/strings/parsers.fsyn
 std/strings/stringexpr.fsyn
+std/strings/parser_syn.fsyn
 std/strings/regexps.fsyn
 std/datatype/tupleexpr.fsyn
 std/datatype/listexpr.fsyn
