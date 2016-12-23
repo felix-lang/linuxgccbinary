@@ -1,4 +1,4 @@
-#line 586 "/home/travis/build/felix-lang/felix/src/packages/parsers.fdoc"
+#line 595 "/home/travis/build/felix-lang/felix/src/packages/parsers.fdoc"
 include "std/strings/parsers";
 
 class Parser_synlib

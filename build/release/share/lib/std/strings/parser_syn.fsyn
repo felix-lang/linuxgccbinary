@@ -1,4 +1,4 @@
-#line 525 "/home/travis/build/felix-lang/felix/src/packages/parsers.fdoc"
+#line 534 "/home/travis/build/felix-lang/felix/src/packages/parsers.fdoc"
 
 syntax parser_syn
 {
