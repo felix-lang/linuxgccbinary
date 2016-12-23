@@ -1,4 +1,4 @@
-#line 368 "/home/travis/build/felix-lang/felix/src/packages/fibres.fdoc"
+#line 375 "/home/travis/build/felix-lang/felix/src/packages/fibres.fdoc"
 syntax spipeexpr
 {
   //$ Left assoc, for schannel pipes.

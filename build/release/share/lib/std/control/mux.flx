@@ -1,4 +1,4 @@
-#line 332 "/home/travis/build/felix-lang/felix/src/packages/fibres.fdoc"
+#line 339 "/home/travis/build/felix-lang/felix/src/packages/fibres.fdoc"
 
 //$ Schannel multiplexor.
 //$ Read multiple input schannels, write to an output schannel.
