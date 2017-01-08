@@ -1,4 +1,4 @@
-#line 1330 "/home/travis/build/felix-lang/felix/src/packages/strings.fdoc"
+#line 1332 "/home/travis/build/felix-lang/felix/src/packages/strings.fdoc"
 class Lexer
 {
   pod type lex_iterator = "char const*";
