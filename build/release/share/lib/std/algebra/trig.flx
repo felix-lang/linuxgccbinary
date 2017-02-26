@@ -1,4 +1,4 @@
-#line 740 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
+#line 748 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
 
 //$ Float-approximate trigonometric functions.
 class Trig[t] {

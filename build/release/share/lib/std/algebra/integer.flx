@@ -1,4 +1,4 @@
-#line 707 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
+#line 715 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
 
 //$ Integers.
 class Integer[t] {

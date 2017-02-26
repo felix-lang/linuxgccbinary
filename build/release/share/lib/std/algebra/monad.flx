@@ -1,4 +1,4 @@
-#line 930 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
+#line 938 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
 
 class Monad [M: TYPE->TYPE] {
   virtual fun bind[a,b]: M a * (a -> M b) -> M b;

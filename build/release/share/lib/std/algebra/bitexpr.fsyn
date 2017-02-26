@@ -1,4 +1,4 @@
-#line 687 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
+#line 695 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
 syntax bitexpr
 {
   //$ Bitwise or, left associative.
