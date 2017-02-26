@@ -1,18 +1,18 @@
-#line 606 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
+#line 598 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
 //$ Float-approximate ring.
 class FloatRing[t] {
   inherit FloatAddgrp[t];
   inherit FloatMultSemi1[t];
 }
 
-#line 617 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
+#line 609 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
 //$ Ring.
 class Ring[t] {
   inherit Addgrp[t];
   inherit MultSemi1[t];
   axiom distrib (x:t,y:t,z:t): x * ( y + z) == x * y + x * z;
 }
-#line 627 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
+#line 619 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
 //$ Float-approximate division ring.
 class FloatDring[t] {
   inherit FloatRing[t];
@@ -32,7 +32,7 @@ class FloatDring[t] {
   proc modeq(px:&t, y:t) { %= (px,y); }
 }
 
-#line 666 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
+#line 658 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
 //$ Division ring.
 class Dring[t] {
   inherit Ring[t];

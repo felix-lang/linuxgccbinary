@@ -1,4 +1,4 @@
-#line 579 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
+#line 573 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
 syntax mulexpr
 {
   //$ multiplication: non-associative.

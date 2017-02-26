@@ -1,4 +1,4 @@
-#line 79 "/home/travis/build/felix-lang/felix/src/packages/logic.fdoc"
+#line 77 "/home/travis/build/felix-lang/felix/src/packages/logic.fdoc"
 syntax boolexpr
 {
   //$ Boolean false.

@@ -1,4 +1,4 @@
-#line 675 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
+#line 667 "/home/travis/build/felix-lang/felix/src/packages/algebra.fdoc"
 
 //$ Bitwise operators.
 class Bits[t] {

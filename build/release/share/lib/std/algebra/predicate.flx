@@ -1,4 +1,4 @@
-#line 145 "/home/travis/build/felix-lang/felix/src/packages/logic.fdoc"
+#line 143 "/home/travis/build/felix-lang/felix/src/packages/logic.fdoc"
 
 // Some operations on predicates.
 // These also automatically apply to relations, but just taking
