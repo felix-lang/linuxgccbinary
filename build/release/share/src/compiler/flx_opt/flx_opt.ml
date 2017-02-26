@@ -66,7 +66,10 @@ let stack_calls syms bsym_table =
 (* Do some platform independent optimizations of the code. *)
 let optimize_bsym_table' syms bsym_table (root_proc: int option) =
   print_debug syms "//OPTIMISING";
-
+(*
+  print_time syms "[flx_opt]; Performing reductions" begin fun () ->
+  Flx_reduce.reduce_all syms bsym_table end; 
+*)
   print_time syms "[flx_opt]; Finding roots" begin fun () ->
   (* Find the root and exported functions and types. *)
   Flx_use.find_roots syms bsym_table root_proc syms.Flx_mtypes2.bifaces end;
@@ -133,10 +136,17 @@ let optimize_bsym_table' syms bsym_table (root_proc: int option) =
   uncurry_functions syms bsym_table end
   in
 
+(*
+print_endline "Uncurrying DONE";
+*)
+
   let bsym_table = print_time syms "[flx_opt]; Generating wrappers (new)" begin fun () ->
   (* make wrappers for non-function functional values *)
   Flx_mkcls2.make_wrappers syms bsym_table end
   in
+(*
+print_endline "Wrapper generation DONE";
+*)
 
   print_time syms "[flx_opt]; Set SVC funs inline " begin fun () -> 
   Flx_svc.svc_set_inline syms bsym_table end;
@@ -151,17 +161,25 @@ let optimize_bsym_table' syms bsym_table (root_proc: int option) =
   in
 
 (*
+print_endline "Unused symbols removed";
+*)
+(*
   let bsym_table = print_time syms "[flx_opt]; Converting functions to procedures" begin fun () ->
   (* convert functions to procedures *)
   mkproc syms bsym_table end
   in
 *)
 
+(*
+print_endline "Dead code elim";
+*)
   print_time syms "[flx_opt]; Eliminate dead code" begin fun () ->
   (* Eliminate dead code. *)
   let elim_state = Flx_elim.make_elim_state syms bsym_table in
   Flx_elim.eliminate_unused elim_state end;
-
+(*
+print_endline "DONE Dead code elim";
+*)
   Flx_svc.svc_check syms bsym_table;
 
   print_time syms "[flx_opt]; Mark heap closures" begin fun () ->

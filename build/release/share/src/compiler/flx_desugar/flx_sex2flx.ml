@@ -129,6 +129,7 @@ and xexpr_t sr x =
   | Lst [Id "ast_apply";  sr; Lst [e1; e2]] -> EXPR_apply(xsr sr,(xexpr_t (xsr sr) e1, xexpr_t (xsr sr) e2))
   | Lst [Id "ast_tuple";  sr; Lst es] -> EXPR_tuple (xsr sr,map (xexpr_t (xsr sr)) es)
   | Lst [Id "ast_tuple_cons";  sr; eh; et] -> EXPR_tuple_cons (xsr sr, xexpr_t (xsr sr) eh, xexpr_t (xsr sr) et)
+  | Lst [Id "ast_tuple_snoc";  sr; eh; et] -> EXPR_tuple_snoc (xsr sr, xexpr_t (xsr sr) eh, xexpr_t (xsr sr) et)
   | Lst [Id "ast_record";  sr; Lst rs] ->
    let rs =
      map (function
@@ -348,6 +349,7 @@ and xpattern_t x =
   | Lst [Id "pat_name"; sr; id] -> PAT_name (xsr sr, xid id)
   | Lst [Id "pat_tuple"; sr; Lst ps] -> PAT_tuple (xsr sr, map xp ps)
   | Lst [Id "pat_tuple_cons"; sr; a; b] -> PAT_tuple_cons (xsr sr, xp a, xp b)
+  | Lst [Id "pat_tuple_snoc"; sr; a; b] -> PAT_tuple_snoc (xsr sr, xp a, xp b)
 
   | Lst [Id "pat_any"; sr] -> PAT_any (xsr sr)
   | Lst [Id "pat_setform_any"; sr] -> PAT_setform_any (xsr sr)
@@ -604,7 +606,8 @@ and xunion_component sr x =
   let xi = function | Int i -> ii i | x -> err x "int" in
   let ti x = type_of_sex sr x in
   match x with
-  | Lst [id; io; vs; t] -> xid id, opt "union component" xi io, xvs vs, ti t
+  | Lst [id; io; vs; d; c] -> xid id, opt "union component" xi io, xvs vs, ti d, Some (ti c)
+  | Lst [id; io; vs; d] -> xid id, opt "union component" xi io, xvs vs, ti d, None
   | x -> err x "union component"
 
 and xstruct_component sr = function
@@ -655,6 +658,11 @@ and xstatement_t sr x : statement_t =
   let xucmp sr x = xunion_component sr x in
   let xscmp sr x = xstruct_component sr x in
   let xp x = xpattern_t x in
+  let xred sr x = match x with
+  | Lst [vs; spl; e1; e2] -> xvs sr vs, xpvs sr spl, ex sr e1, ex sr e2 
+  | _ -> err x "reduction format" 
+  in
+
   let lnot sr x = EXPR_not (sr, x) in
   match x with
   | Lst [Id "ast_circuit"; sr; Lst cs] -> let sr = xsr sr in
@@ -673,14 +681,12 @@ and xstatement_t sr x : statement_t =
   | Lst [Id "ast_comment"; sr; Str s] -> let sr = xsr sr in STMT_comment (sr, s)
   | Lst [Id "ast_private"; sr; x] -> let sr = xsr sr in STMT_private (sr, xs sr x)
 
-  | Lst [Id "ast_reduce"; sr; id; vs; spl; e1; e2] -> let sr = xsr sr in 
+  | Lst [Id "ast_reduce"; sr; id; Lst reductions]  -> let sr = xsr sr in 
     STMT_reduce (
       sr,
       xid id,
-      xvs sr vs,
-      xpvs sr spl,
-      ex sr e1,
-      ex sr e2)
+      map (xred sr) reductions 
+      )
 
   | Lst [Id "ast_axiom"; sr; id; vs; ps; axm] -> let sr = xsr sr in 
     STMT_axiom (

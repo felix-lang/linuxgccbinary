@@ -16,23 +16,50 @@ let normalise_tuple_cons bsym_table t =
   let rec nt t = 
     match Flx_btype.map ~f_btype:nt t with
     | BTYP_tuple_cons (t1, BTYP_tuple ls) ->
-      let r = BTYP_tuple (t1 :: ls) in
+      let r = btyp_tuple (t1 :: ls) in
       r
 
     | BTYP_tuple_cons (t1, BTYP_array (t2, BTYP_unitsum n)) when t1 = t2 ->
-      let r = BTYP_array (t1, BTYP_unitsum (n+1)) in
+      let r = btyp_array (t1, btyp_unitsum (n+1)) in
       r
 
     | BTYP_tuple_cons (t1, BTYP_array (t2, BTYP_unitsum n)) ->
       assert (n < 50);
       let rec arr n ts = match n with 0 -> ts | _ -> arr (n-1) (t2::ts) in
       let ts = arr n [] in
-      let r = BTYP_tuple (t1 :: ts) in
+      let r = btyp_tuple (t1 :: ts) in
       r
 
+    | BTYP_tuple_snoc (BTYP_tuple ls,t1) ->
+      let r = btyp_tuple (ls@[t1]) in
+      r
+
+    | BTYP_tuple_snoc (BTYP_array (t2, BTYP_unitsum n),t1) when t1 = t2 ->
+      let r = btyp_array (t1, btyp_unitsum (n+1)) in
+      r
+
+    | BTYP_tuple_cons (BTYP_array (t2, BTYP_unitsum n),t1) ->
+      assert (n < 50);
+      let rec arr n ts = match n with 0 -> ts | _ -> arr (n-1) (t2::ts) in
+      let ts = arr n [] in
+      let r = btyp_tuple (ts@[t1]) in
+      r
+
+
+
 (*
-    | BTYP_tuple_cons (t1, (BTYP_type_var _ as v)) ->
-      BTYP_tuple_cons (nt t1, v)
+
+    | BTYP_tuple_cons (t1, (BTYP_type_var _ )) as x ->
+      x
+
+    | BTYP_tuple_cons (t1, (BTYP_tuple_cons (t2, BTYP_type_var _ ))) as x ->
+      x
+
+    | BTYP_tuple_cons (t1,t2) -> btyp_tuple [t1;t2]
+
+    | BTYP_tuple_cons (_,t) -> 
+      print_endline ("Error, tuple cons value to non-tuple, type  " ^ sbt bsym_table t); 
+      assert false
 *)
     | t -> t 
   in 
@@ -72,12 +99,13 @@ let rec dual t =
     btyp_tuple (aux [] k)
 
   | BTYP_type_set ts -> btyp_intersect (List.map dual ts)
-  | BTYP_intersect ts -> btyp_type_set (List.map dual ts)
+  | BTYP_intersect ts -> btyp_union (List.map dual ts)
+  | BTYP_union ts -> btyp_intersect (List.map dual ts)
   | BTYP_record (ts) -> btyp_variant ts
   | t -> t
 
 (* top down check for fix point not under sum or pointer *)
-let rec check_recursion t = match t with
+let rec check_rec t = match t with
    | BTYP_pointer _
    | BTYP_sum _
    | BTYP_function _
@@ -88,7 +116,16 @@ let rec check_recursion t = match t with
    | BTYP_fix (i,_)
      -> raise Bad_recursion
 
-   | x -> Flx_btype.flat_iter ~f_btype:check_recursion x
+   | x -> Flx_btype.flat_iter ~f_btype:check_rec x
+
+let check_recursion bsym_table t =
+  try check_rec t
+  with 
+  | Bad_recursion ->
+    print_endline ("Flx-unify: check_recursion: Bad_recursion " ^ 
+      str_of_btype t ^ " = " ^ 
+      sbt bsym_table t);
+    raise Bad_recursion 
 
 let is_recursive_type t = 
   let rec ir j t = 
@@ -294,18 +331,21 @@ let fix i t =
     match t with
     | BTYP_hole -> assert false
     | BTYP_tuple_cons _ -> assert false
+    | BTYP_tuple_snoc _ -> assert false
     | BTYP_none -> assert false
     | BTYP_type_var (k,mt) -> if k = i then btyp_fix n mt else t
     | BTYP_inst (k,ts) -> btyp_inst (k, List.map aux ts)
     | BTYP_tuple ts -> btyp_tuple (List.map aux ts)
     | BTYP_sum ts -> btyp_sum (List.map aux ts)
     | BTYP_intersect ts -> btyp_intersect (List.map aux ts)
+    | BTYP_union ts -> btyp_union (List.map aux ts)
     | BTYP_type_set ts -> btyp_type_set (List.map aux ts)
     | BTYP_function (a,b) -> btyp_function (aux a, aux b)
     | BTYP_effector (a,e,b) -> btyp_effector (aux a, aux e, aux b)
     | BTYP_cfunction (a,b) -> btyp_cfunction (aux a, aux b)
     | BTYP_pointer a -> btyp_pointer (aux a)
     | BTYP_array (a,b) -> btyp_array (aux a, aux b)
+    | BTYP_rev t -> btyp_rev (aux t)
 
     | BTYP_record (ts) ->
        btyp_record (List.map (fun (s,t) -> s, aux t) ts)
@@ -322,6 +362,7 @@ let fix i t =
     | BTYP_void
     | BTYP_fix _
     | BTYP_type_apply _
+    | BTYP_type_map _
     | BTYP_type_function _
     | BTYP_type _
     | BTYP_type_tuple _
@@ -426,6 +467,10 @@ let rec unification bsym_table counter eqns dvars =
       let lhs = unfold "unification" lhs in
       let rhs = unfold "unification" rhs in
       begin match lhs,rhs with
+      | BTYP_rev t1, BTYP_rev t2 ->
+        add_eqn (t1,t2)
+
+
       | (BTYP_type_var (i,mi) as ti), (BTYP_type_var (j,mj) as tj)->
         (*
         print_endline ("Equated variables " ^ si i ^ " <-> " ^ si j);
@@ -468,9 +513,25 @@ let rec unification bsym_table counter eqns dvars =
           s := Some (i,t)
         end
 
+      (* Note: the t here cannot be a BTYP_rev term, nor a type variable!
+       * the first case is rev t = rev u previously eliminated,
+       * the second case rev t = u also previously eliminated
+       * therefore this operation cannot cause an infinite loop
+       * note the laws rev(rev x) = x and rev x = y implies x = rev y
+       *)
+      | BTYP_rev (BTYP_type_var (i,m) as tvar),t 
+      | t,BTYP_rev (BTYP_type_var (i,m) as tvar) ->
+        add_eqn (tvar,btyp_rev t)
+ 
+
       | BTYP_intersect ts,t
       | t,BTYP_intersect ts ->
         List.iter (function t' -> add_eqn (t,t')) ts
+
+      | BTYP_union ts,t
+      | t,BTYP_union ts ->
+        print_endline ("Unify union type not implemented");
+        assert false
 
       | BTYP_pointer t1, BTYP_pointer t2 ->
         add_eqn (t1,t2)
@@ -631,11 +692,22 @@ print_endline "Trying to unify instances (2)";
 
       | BTYP_tuple_cons (t0,ts), BTYP_tuple_cons (t0',ts') ->
         add_eqn (t0,t0'); add_eqn (ts,ts')
+      | BTYP_tuple_snoc (ts,t0), BTYP_tuple_snoc (ts',t0') ->
+        add_eqn (t0,t0'); add_eqn (ts,ts')
 
       | BTYP_tuple (t0::ts1::ts2::ts), BTYP_tuple_cons (t0',ts')
       | BTYP_tuple_cons (t0',ts'), BTYP_tuple (t0::ts1::ts2::ts) ->
-        add_eqn (t0,t0'); add_eqn (BTYP_tuple (ts1::ts2::ts), ts')
+        add_eqn (t0,t0'); add_eqn (btyp_tuple (ts1::ts2::ts), ts')
 
+      | BTYP_tuple (ts), BTYP_tuple_snoc (ts',t0')
+      | BTYP_tuple_snoc (ts',t0'), BTYP_tuple (ts) ->
+        begin match List.rev ts with
+        | t0::ts1::ts2::rts ->
+          add_eqn (t0,t0'); 
+          let ts = List.rev (ts1::ts2::rts) in 
+          add_eqn (btyp_tuple (ts), ts')
+        | _ -> ()
+        end
 (*
       (* T ^ N = T by setting N = 1 *)
       | BTYP_array (t11, (BTYP_type_var (i,_) as tv)), t21 
@@ -690,6 +762,11 @@ print_endline ("Converted LHS body=" ^ sbt bsym_table b1);
       | BTYP_type_apply (f1,a1), BTYP_type_apply (f2,a2)  ->
 print_endline "Trying to unify type application";
         add_eqn (f1,f2); add_eqn (a1,a2)
+
+      | BTYP_type_map (f1,a1), BTYP_type_map (f2,a2)  ->
+print_endline "Trying to unify type map";
+        add_eqn (f1,f2); add_eqn (a1,a2)
+
 
       | x,y ->
 (*
@@ -890,8 +967,13 @@ let rec type_eq' bsym_table counter ltrail ldepth rtrail rdepth trail t1 t2 =
   | BTYP_function (s1,d1),BTYP_function (s2,d2)
   | BTYP_cfunction (s1,d1),BTYP_cfunction (s2,d2)
   | BTYP_type_apply(s1,d1),BTYP_type_apply(s2,d2)
+  | BTYP_type_map(s1,d1),BTYP_type_map(s2,d2)
   | BTYP_tuple_cons (s1,d1),BTYP_tuple_cons (s2,d2)
     -> te s1 s2 && te d1 d2
+
+  | BTYP_tuple_snoc (s1,d1),BTYP_tuple_snoc (s2,d2)
+    -> te s1 s2 && te d1 d2
+
 
   | BTYP_effector (s1,e1,d1),BTYP_effector (s2,e2,d2)
     -> te s1 s2 && te d1 d2 && te e1 e2
@@ -1008,6 +1090,7 @@ let fold bsym_table counter t =
     let ax t = aux ((depth,t')::trail) (depth+1) t in
     match t' with
     | BTYP_intersect ls
+    | BTYP_union ls
     | BTYP_sum ls
     | BTYP_inst (_,ls)
     | BTYP_tuple ls -> List.iter ax ls
@@ -1021,7 +1104,10 @@ let fold bsym_table counter t =
     | BTYP_cfunction (a,b) -> ax a; ax b
 
     | BTYP_pointer a -> ax a
+    | BTYP_rev a -> ax a
+
     | BTYP_tuple_cons (a,b) -> ax a; ax b
+    | BTYP_tuple_snoc (a,b) -> ax a; ax b
 
     | BTYP_hole
     | BTYP_label 
@@ -1041,6 +1127,7 @@ let fold bsym_table counter t =
       end
 
     | BTYP_type_apply (a,b) -> ax a; ax b
+    | BTYP_type_map(a,b) -> ax a; ax b
 
     | BTYP_type_set_intersection _
     | BTYP_type_set_union _
@@ -1054,6 +1141,7 @@ let fold bsym_table counter t =
     try aux [] 0 t; t
     with Found t -> t
 
+(* 
 exception Discard of int * int 
 
 let wrap bsym_table counter t =
@@ -1180,6 +1268,7 @@ let wrap bsym_table counter t =
     in
     aux [] 0 t
 
+*)
 
 (* produces a unique minimal representation of a type
 by folding at every node *)
@@ -1216,6 +1305,7 @@ let var_occurs bsym_table t =
     | BTYP_cfunction (a,b) -> aux a; aux b
 
     | BTYP_pointer a  -> aux a
+    | BTYP_rev a -> aux a
 
     | BTYP_label
     | BTYP_unitsum _
@@ -1227,7 +1317,10 @@ let var_occurs bsym_table t =
       aux' (List.map fst p @ excl) b
     
     | BTYP_type_apply (a,b) -> aux a; aux b
+    | BTYP_type_map (a,b) -> aux a; aux b
     | BTYP_tuple_cons (a,b) -> aux a; aux b
+    | BTYP_tuple_snoc (a,b) -> aux a; aux b
+
     | _ -> 
       print_endline ("[var_occurs] unexpected metatype " ^ sbt bsym_table t);
       failwith ("[var_occurs] unexpected metatype " ^ sbt bsym_table t)

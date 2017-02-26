@@ -108,8 +108,7 @@ let rec process_expr syms bsym_table ref_insts1 hvarmap sr ((e,t) as be) =
   | BEXPR_label (i) ->  ui i []
 
   | BEXPR_int _ -> ()
-  | BEXPR_unit -> ()
-  | BEXPR_unitptr -> ()
+  | BEXPR_unitptr _ -> ()
 
   | BEXPR_cond (c,t,f) -> ue c; ue t; ue f
   | BEXPR_not e
@@ -122,7 +121,7 @@ let rec process_expr syms bsym_table ref_insts1 hvarmap sr ((e,t) as be) =
     -> ue e
   | BEXPR_aprj (e,d,c) ->
     ue e;
-    ut (vs (BTYP_function (d,c)))
+    ut (vs (btyp_function (d,c)))
 
   | BEXPR_apply_prim (index,ts,a)
   | BEXPR_apply_direct (index,ts,a)
@@ -191,9 +190,21 @@ let rec process_expr syms bsym_table ref_insts1 hvarmap sr ((e,t) as be) =
     ue e;
     register_tuple syms bsym_table (vs t) (* NOTE: this is the type of the tail! *)
 
+  | BEXPR_tuple_last e ->
+    ue e
+
+  | BEXPR_tuple_body e ->
+    ue e;
+    register_tuple syms bsym_table (vs t) (* NOTE: this is the type of the body! *)
+
   | BEXPR_tuple_cons (eh, et) ->
     ue eh; ue et; 
     register_tuple syms bsym_table (vs t)
+
+  | BEXPR_tuple_snoc (eh, et) ->
+    ue eh; ue et; 
+    register_tuple syms bsym_table (vs t)
+
 
   | BEXPR_record es ->
     let ss,es = split es in
@@ -215,7 +226,11 @@ let rec process_expr syms bsym_table ref_insts1 hvarmap sr ((e,t) as be) =
 
   | BEXPR_prj (_,d,c) 
   | BEXPR_rprj (_,_,d,c) 
-  | BEXPR_inj (_,d,c) -> ut (vs (BTYP_function (d,c)))
+  | BEXPR_inj (_,d,c) -> ut (vs (btyp_function (d,c)))
+
+  | BEXPR_identity_function t -> 
+    let t = vs t in
+    ut (btyp_function (t,t))
 
   | BEXPR_ref (i,ts)
   | BEXPR_varname (i,ts)
@@ -418,7 +433,7 @@ and process_inst syms bsym_table instps ref_insts1 i ts inst =
       ts
 
   | BBDCL_union (vs,ps) ->
-    let argtypes = map (fun (_,_,t)->t) ps in
+    let argtypes = map (fun (_,_,evs,argt,rest,_)->argt) ps in
     assert (length vs = length ts);
     let vars = map2 (fun (s,i) t -> i,t) vs ts in
     let hvarmap = hashtable_of_list vars in

@@ -66,9 +66,9 @@ type dcl_t =
   (* data structures *)
   | DCL_axiom of         params_t * axiom_method_t
   | DCL_lemma of         params_t * axiom_method_t
-  | DCL_reduce of        simple_parameter_t list * expr_t * expr_t
+  | DCL_reduce of        (vs_list_t * simple_parameter_t list * expr_t * expr_t) list
   | DCL_function of      params_t * typecode_t * typecode_t * property_t list * asm_t list
-  | DCL_union of         (Flx_id.t * int option * vs_list_t * typecode_t) list
+  | DCL_union of         (Flx_id.t * int option * vs_list_t * typecode_t * typecode_t option) list
   | DCL_struct of        (Flx_id.t * typecode_t) list
   | DCL_cstruct of       (Flx_id.t * typecode_t) list * named_req_expr_t
   | DCL_typeclass of     asm_t list
@@ -127,7 +127,7 @@ type symbol_definition_t =
   | SYMDEF_typevar of typecode_t (* usually type TYPE *)
   | SYMDEF_axiom of params_t * axiom_method_t
   | SYMDEF_lemma of params_t * axiom_method_t
-  | SYMDEF_reduce of parameter_t list * expr_t * expr_t
+  | SYMDEF_reduce of (ivs_list_t * parameter_t list * expr_t * expr_t) list
   | SYMDEF_function of params_t * typecode_t * typecode_t * property_t list * sexe_t list
 
   | SYMDEF_root of bid_t option (* initialiser procedure *)
@@ -136,7 +136,7 @@ type symbol_definition_t =
   | SYMDEF_typeclass
 
   | SYMDEF_const_ctor of bid_t * typecode_t * int * ivs_list_t
-  | SYMDEF_nonconst_ctor of bid_t * typecode_t * int * ivs_list_t * typecode_t
+  | SYMDEF_nonconst_ctor of bid_t * typecode_t * int * ivs_list_t * typecode_t 
   | SYMDEF_const of property_t list * typecode_t * Flx_code_spec.t * named_req_expr_t
   | SYMDEF_var of typecode_t
   | SYMDEF_val of typecode_t
@@ -145,7 +145,7 @@ type symbol_definition_t =
   | SYMDEF_fun of property_t list * typecode_t list * typecode_t * Flx_code_spec.t  * named_req_expr_t * prec_t
   | SYMDEF_callback of property_t list * typecode_t list * typecode_t * named_req_expr_t
   | SYMDEF_insert of Flx_code_spec.t  * ikind_t * named_req_expr_t
-  | SYMDEF_union of (Flx_id.t * int *  vs_list_t * typecode_t) list
+  | SYMDEF_union of (Flx_id.t * int *  ivs_list_t * typecode_t * typecode_t * bool) list
   | SYMDEF_struct of (Flx_id.t * typecode_t) list
   | SYMDEF_cstruct of (Flx_id.t * typecode_t) list * named_req_expr_t 
   | SYMDEF_type_alias of typecode_t

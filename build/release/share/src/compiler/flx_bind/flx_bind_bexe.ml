@@ -244,7 +244,7 @@ let print_vs vs =
 
 type bexe_t = Flx_bexe.t
 
-let rec bind_exe (state: Flx_bexe_state.bexe_state_t) bsym_table (sr, exe) : bexe_t list =
+let rec bind_exe' (state: Flx_bexe_state.bexe_state_t) bsym_table (sr, exe) : bexe_t list =
   let be e =
     bind_expression
       state.lookup_state
@@ -263,8 +263,6 @@ let rec bind_exe (state: Flx_bexe_state.bexe_state_t) bsym_table (sr, exe) : bex
 (*
 print_endline ("Bind_exe, return type " ^ Flx_print.sbt bsym_table state.ret_type);
   print_endline ("EXE="^string_of_exe 1 exe);
-*)
-(*
   if not state.reachable then
   begin
     match exe with
@@ -283,13 +281,15 @@ print_endline ("Bind_exe, return type " ^ Flx_print.sbt bsym_table state.ret_typ
   ;
 *)
   match exe with
+  | EXE_begin_match_case
+  | EXE_end_match_case -> assert false
   | EXE_circuit cs -> Flx_bind_circuit.bind_circuit bsym_table state sr be cs 
 
   | EXE_comment s ->
       [bexe_comment (sr,s)]
 
   | EXE_type_error x ->
-    let result = try Some (bind_exe state bsym_table (sr, x)) with _ -> None
+    let result = try Some (bind_exe' state bsym_table (sr, x)) with _ -> None
     in begin match result with
     | None -> []
     | Some _ -> clierrx "[flx_bind/flx_bind_bexe.ml:295: E15] " sr ("type_error expected, statement compiled! " ^ string_of_exe 0 exe);
@@ -409,14 +409,18 @@ print_endline ("Bind_exe, return type " ^ Flx_print.sbt bsym_table state.ret_typ
     [(cal_loop state.sym_table sr tbe1 (be2,t2) index)]
 
   | EXE_jump (a,b) ->
-    bind_exe state bsym_table (sr, EXE_call (a, b)) @
-    bind_exe state bsym_table (sr, EXE_proc_return) 
+    bind_exe' state bsym_table (sr, EXE_call (a, b)) @
+    bind_exe' state bsym_table (sr, EXE_proc_return) 
 
   | EXE_call (EXPR_name (_,"axiom_check",[]), e2) ->
     [(bexe_axiom_check (sr,be e2))]
 
   | EXE_call (EXPR_apply(_,(EXPR_name (_,"_iter",[]), EXPR_name (_,fn,[]))),arg) ->
-    Flx_gmap.generic_map_proc bsym_table (bind_exe state) be sr fn arg 
+    Flx_gmap.generic_map_proc bsym_table (bind_exe' state) be sr fn arg 
+
+  | EXE_call (EXPR_apply(_,(EXPR_name (_,"_rev_iter",[]), EXPR_name (_,fn,[]))),arg) ->
+    Flx_gmap.generic_rev_map_proc bsym_table (bind_exe' state) be sr fn arg 
+
 
 
   (* do overloading here FIXME ?? *)
@@ -486,7 +490,7 @@ print_endline ("        >>> Call, bound argument is type " ^ sbt bsym_table ta);
       with exn ->
       try
       let apl name =
-        bind_exe state bsym_table 
+        bind_exe' state bsym_table 
           (
             sr,
             EXE_call
@@ -501,7 +505,7 @@ print_endline ("        >>> Call, bound argument is type " ^ sbt bsym_table ta);
       end
     | _ ->
       let apl name =
-        bind_exe state bsym_table 
+        bind_exe' state bsym_table 
           (
             sr,
             EXE_call
@@ -517,7 +521,7 @@ print_endline ("        >>> Call, bound argument is type " ^ sbt bsym_table ta);
       begin try 
         match f',a' with
         | EXPR_apply (sr,(f'',a'')), EXPR_tuple (_,[]) -> 
-          bind_exe state bsym_table (sr, EXE_call (f'',a''))
+          bind_exe' state bsym_table (sr, EXE_call (f'',a''))
         | _ -> raise x
       with _ -> raise x
       end
@@ -588,7 +592,7 @@ print_endline ("Function return value has MINIMISED type " ^ sbt bsym_table t');
     if match maybe_matches bsym_table state.counter [state.ret_type, t'] with Some _ -> true | _ -> false then
 *)
       [(bexe_fun_return (sr,(e',t')))]
-    else if t' = BTYP_fix (0, BTYP_type 0) then begin
+    else if t' = btyp_fix 0 (btyp_type 0) then begin
       print_endline "Converting return of 'any' type to procedure call";
       state.reachable <- false;
       [(bexe_fun_return (sr,(e',state.ret_type)))]
@@ -800,6 +804,13 @@ print_endline ("assign after beta-reduction: RHST = " ^ sbt bsym_table rhst);
      let t = bind_type state.lookup_state bsym_table state.env sr t in
      [(bexe_catch sr s t)]
 
+let rec bind_exe (state: Flx_bexe_state.bexe_state_t) bsym_table (sr, exe) : bexe_t list =
+  try bind_exe' state bsym_table (sr,exe)
+  with Flx_dot.OverloadResolutionError as exn ->
+     print_endline  ("Overload resolution error binding exe: " ^ string_of_exe 2 exe);
+     print_endline (Flx_srcref.long_string_of_src sr);
+     raise exn
+
 let bind_exes state bsym_table sr exes : Flx_btype.t * Flx_bexe.t list  =
 (*
   print_endline ("bind_exes.. env depth="^ string_of_int (List.length state.env));
@@ -817,13 +828,53 @@ let bind_exes state bsym_table sr exes : Flx_btype.t * Flx_bexe.t list  =
   print_endline "-------------------";
 *)
 
+  let rec get_subextent (exes : sexe_t list) : bexe_t list * sexe_t list =
+    let rec bind (exes: sexe_t list) (result : bexe_t list) : bexe_t list * sexe_t list  =
+      match exes with
+      | [] -> result, []
+      | (_,EXE_end_match_case) :: tail -> result, tail
+      | (_,EXE_begin_match_case) :: tail ->
+        begin try
+          let processed, tail = get_subextent tail in
+          bind tail (result @ processed) 
+        with GadtUnificationFailure ->
+          (* skip up to end of match case, take account of 
+             any nested match cases too, this should drop
+             the WHOLE subextent containing a unification
+             failure
+          *)
+          let rec skip (ls: sexe_t list): sexe_t list = 
+            match ls with 
+            | [] -> assert false
+            | (_,EXE_end_match_case) :: tail -> tail
+            | (_,EXE_begin_match_case) :: tail -> 
+              skip (skip tail)
+            | h :: tail -> skip tail
+          in
+          bind (skip tail) result
+        end
+
+      | exe :: tail -> 
+        let bs =  (bind_exe state bsym_table exe) in
+        bind tail (result @ bs)
+    in
+    bind exes [] 
+  in
+  let bound_exes, tail = get_subextent exes in
+  assert (List.length tail = 0);
+(*
   let bound_exes = List.fold_left (fun acc exe ->
-    let result = bind_exe state bsym_table  exe in
-    List.rev result @ acc
+    try
+      let result = bind_exe state bsym_table  exe in
+      List.rev result @ acc
+    with GadtUnificationFailure ->
+print_endline ("GADT UNIFICATION FAILURE generating exe " ^ string_of_exe 2 (snd exe));
+      acc
   )
   [] exes 
   in
   let bound_exes = List.rev bound_exes in
+*)
 (*
   print_endline ""
   ;

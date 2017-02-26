@@ -176,7 +176,11 @@ and string_of_expr (e:expr_t) =
      cat "+" (map se ts)
 
   | EXPR_intersect (_,ts) ->
-     cat "&" (map se ts)
+     cat "\\&" (map se ts)
+
+  | EXPR_union (_,ts) ->
+     cat "\\|" (map se ts)
+
 
   | EXPR_isin (_,(a,b)) ->
      se a ^ " isin " ^ se b
@@ -202,7 +206,10 @@ and string_of_expr (e:expr_t) =
   | EXPR_tuple (_,t) -> "(" ^ catmap ", " se t ^ ")"
   | EXPR_get_tuple_tail (_,t) -> "get_tuple_tail(" ^ se t ^ ")"
   | EXPR_get_tuple_head (_,t) -> "get_tuple_head(" ^ se t ^ ")"
+  | EXPR_get_tuple_body(_,t) -> "get_tuple_body(" ^ se t ^ ")"
+  | EXPR_get_tuple_last(_,t) -> "get_tuple_last(" ^ se t ^ ")"
   | EXPR_tuple_cons (_,eh, et) -> "tuple_cons (" ^ se eh ^ "," ^ se et ^ ")"
+  | EXPR_tuple_snoc (_,eh, et) -> "tuple_snoc (" ^ se eh ^ "," ^ se et ^ ")"
 
   | EXPR_record (_,ts) ->
       "(" ^
@@ -370,6 +377,7 @@ and st prec tc : string =
       | Some t -> 0,"(DEFER:"^string_of_typecode t^")" 
       end
     | TYP_tuple_cons (sr, t1, t2) -> 6, st 4 t1 ^ "**" ^ st 4 t2
+    | TYP_tuple_snoc (sr, t1, t2) -> 6, st 4 t1 ^ "<**>" ^ st 4 t2
 
     | TYP_index (sr,name,idx) -> 0, name ^ "<" ^ string_of_bid idx ^ ">"
     | TYP_label -> 0, "LABEL"
@@ -470,9 +478,17 @@ and st prec tc : string =
     | TYP_intersect ls ->
       let ls = filter (fun t -> t <> TYP_tuple []) ls in
       begin match ls with
-      | [] -> 0,"unit"
-      | _ -> 9,cat " & " (map (st 9) ls)
+      | [] -> 0,"void"
+      | _ -> 9,cat " \\& " (map (st 9) ls)
       end
+
+    | TYP_union ls ->
+      let ls = filter (fun t -> match t with | TYP_void _ -> false | _ -> true) ls in
+      begin match ls with
+      | [] -> 0,"any"
+      | _ -> 9,cat " \\& " (map (st 9) ls)
+      end
+
 
     | TYP_setintersection ls ->
       begin match ls with
@@ -606,6 +622,9 @@ and sb bsym_table depth fixlist counter prec tc =
     | BTYP_tuple_cons (t1,t2) -> 
       5,(sbt 5 t1) ^ " ** " ^ (sbt 5 t2)
 
+    | BTYP_tuple_snoc (t1,t2) -> 
+      5,(sbt 5 t1) ^ " <**> " ^ (sbt 5 t2)
+
     | BTYP_type_match (t,ps) ->
       0,
       (
@@ -652,6 +671,9 @@ and sb bsym_table depth fixlist counter prec tc =
       | [x] -> failwith ("UNEXPECTED TUPLE OF ONE ARGUMENT " ^ sbt 9 x)
       | _ -> 4,cat " * " (map (sbt 4) ls)
       end
+
+    | BTYP_rev t -> 0, "_rev(" ^ sbt 0 t ^ ")"
+      
 
     | BTYP_record (ls) ->
       begin match ls with
@@ -703,6 +725,14 @@ and sb bsym_table depth fixlist counter prec tc =
           4,cat " and " (map (sbt 5) ls)
       end
 
+    | BTYP_union ls ->
+      begin match ls with
+      | [] -> 9,"/*union*/any"
+      | _ ->
+          4,cat " and " (map (sbt 5) ls)
+      end
+
+
     | BTYP_type_set_intersection ls ->
       begin match ls with
       | [] -> 9,"/*typesetintersect*/void"
@@ -737,6 +767,7 @@ and sb bsym_table depth fixlist counter prec tc =
     | BTYP_void -> 0,"void"
 
     | BTYP_type_apply (t1,t2) -> 2,sbt 2 t1 ^ " " ^ sbt 2 t2
+    | BTYP_type_map (t1,t2) -> 2,"_map " ^ sbt 2 t1 ^ " " ^ sbt 2 t2
     | BTYP_type i -> 0,"TYPE " ^ si i
     | BTYP_type_tuple ls ->
       begin match ls with
@@ -857,6 +888,7 @@ and string_of_pattern p =
   | PAT_tuple (_,ps) -> "(" ^ catmap ", "  string_of_pattern ps ^ ")"
   | PAT_alt (_,ps) -> "(" ^ catmap " | "  string_of_pattern ps ^ ")"
   | PAT_tuple_cons (_,a,b) -> string_of_pattern a ^ ",," ^ string_of_pattern b
+  | PAT_tuple_snoc (_,a,b) -> string_of_pattern a ^ "<,,>" ^ string_of_pattern b
   | PAT_any _ -> "any"
   | PAT_setform_any _ -> "setform_any (elidable)"
   | PAT_const_ctor (_,s) -> "|" ^ string_of_qualified_name s
@@ -913,7 +945,8 @@ and special_string_of_typecode ty =  (* used for constructors *)
   | TYP_tuple [] -> ""
   | _ -> " of " ^ string_of_typecode ty
 
-and special_string_of_btypecode bsym_table ty =  (* used for constructors *)
+and special_string_of_btypecode bsym_table evs ty =  (* used for constructors *)
+  string_of_bvs evs ^
   match ty with
   | BTYP_tuple [] -> ""
   | _ -> " of " ^ string_of_btypecode (Some bsym_table) ty
@@ -932,7 +965,7 @@ and string_of_tconstraint = function
   | TYP_tuple [] -> ""
   | TYP_intersect [TYP_tuple []] -> ""
   | t -> let x = string_of_typecode t in
-    if x <> "unit" then " where " ^ x else ""
+    if x <> "any" then " where " ^ x else ""
 
 and string_of_tclass_req qn = string_of_qualified_name qn
 
@@ -1327,10 +1360,12 @@ and string_of_statement level s =
     string_of_compound level sts
 
   | STMT_union (_,name, vs,cs) ->
-    let string_of_union_component (name,cval, vs,ty) =
+    let string_of_union_component (name,cval, vs,d,c) =
       (spaces (level+1)) ^ "|" ^ string_of_id name ^
       (match cval with None -> "" | Some i -> "="^ si i) ^
-      special_string_of_typecode ty
+      special_string_of_typecode d ^ 
+      (match c with None -> "" | Some c -> " => " ^
+      string_of_typecode c)
     in
     spaces level ^ "union " ^ string_of_id name ^ string_of_vs vs ^ " = " ^
     spaces level ^ "{\n" ^
@@ -1397,11 +1432,16 @@ and string_of_statement level s =
   | STMT_noreturn_code (_,s,e) ->
     "noreturn_code \n" ^ string_of_long_code_spec s ^ " "^ se e^";\n"
 
-  | STMT_reduce (_,name, vs, ps, rsrc, rdst) ->
+  | STMT_reduce (_,name, reds) ->
     spaces level ^
-    "reduce " ^ string_of_id name ^ string_of_vs vs ^
-    "("^string_of_basic_parameters ps^"): "^
-    string_of_expr rsrc ^ " => " ^ string_of_expr rdst ^
+    "reduce " ^ string_of_id name ^ 
+    String.concat ("\n" ^ spaces level ^ " | ") (List.map (fun (vs, ps, rsrc, rdst) ->
+      "\n| " ^ string_of_vs vs ^
+      "("^string_of_basic_parameters ps^"): "^
+      string_of_expr rsrc ^ " => " ^ string_of_expr rdst 
+    )
+    reds)
+    ^
     ";\n"
 
   | STMT_axiom (_,name, vs, ps, a) ->
@@ -1663,13 +1703,13 @@ and string_of_symdef entry name vs =
 
   | SYMDEF_const_ctor (uidx,ut,idx,vs') ->
      st ut ^ "  const_ctor: " ^
-     string_of_id name ^ string_of_ivs vs ^
+     string_of_id name ^ string_of_ivs vs ^ " => " ^ st ut ^
      ";"
 
   | SYMDEF_nonconst_ctor (uidx,ut,idx,vs',argt) ->
      st ut ^ "  nonconst_ctor: " ^
      string_of_id name ^ string_of_ivs vs ^
-     " of " ^ st argt ^
+     " of " ^ st argt ^ " => " ^ st ut^ 
      ";"
 
   | SYMDEF_type_alias t ->
@@ -1784,8 +1824,13 @@ and string_of_symdef entry name vs =
      string_of_named_reqs reqs ^
     ";\n"
 
-  | SYMDEF_reduce (ps,e1,e2) ->
-    "reduce " ^ string_of_id name ^ string_of_ivs vs ^ ";"
+  | SYMDEF_reduce reds->
+    "reduce " ^ string_of_id name ^ 
+    catmap "| " (fun (ivs,ps,e1,e2) ->
+       string_of_ivs ivs ^ " ... "
+    )
+    reds 
+     ^ ";"
 
   | SYMDEF_axiom (ps,e1) ->
     "axiom " ^ string_of_id name ^ string_of_ivs vs ^ ";"
@@ -1830,6 +1875,8 @@ and string_of_exe level s =
   and se e = string_of_expr e
   in
   match s with
+  | EXE_begin_match_case -> "begin_match_case"
+  | EXE_end_match_case -> "end_match_case"
 
   | EXE_circuit cs ->
     "connections\n" ^
@@ -1952,12 +1999,19 @@ and string_of_bound_expression' bsym_table se e =
   match fst e with
 
   | BEXPR_cond (c,t,f) -> "if " ^ se c ^ " then " ^ se t ^ " else " ^ se f ^ " endif"
-  | BEXPR_unit -> "()"
-  | BEXPR_unitptr -> "NULL"
+  | BEXPR_unitptr k -> 
+    begin match k with 
+    | 0 -> "()" 
+    | 1 -> "NULL" 
+    | _ -> "NULL<"^string_of_int k^">" 
+    end
   | BEXPR_label (i) -> sid i ^ "label"
   | BEXPR_tuple_head e -> "tuple_head ("^ se e ^")"
   | BEXPR_tuple_tail e -> "tuple_tail("^ se e ^")"
+  | BEXPR_tuple_body e -> "tuple_body("^ se e ^")"
+  | BEXPR_tuple_last e -> "tuple_last("^ se e ^")"
   | BEXPR_tuple_cons (eh,et) -> "tuple_cons("^ se eh ^"," ^ se et ^")"
+  | BEXPR_tuple_snoc (eh,et) -> "tuple_snoc ("^ se eh ^"," ^ se et ^")"
   | BEXPR_aprj (ix,d,c) -> "aprj("^se ix^")"
   | BEXPR_rprj (ix,n,d,c) -> "rprj_"^string_of_int n^"("^ix^")"
   | BEXPR_prj (n,d,c) -> "(prj"^ si n^":"^sbt bsym_table d ^ " -> " ^ sbt bsym_table c^ ")"
@@ -1968,6 +2022,7 @@ and string_of_bound_expression' bsym_table se e =
   | BEXPR_deref e -> "*("^ se e ^ ")"
   | BEXPR_varname (i,ts) -> sid i ^ string_of_inst "varname" bsym_table ts
   | BEXPR_closure (i,ts) -> sid i ^ string_of_inst "closure" bsym_table ts
+  | BEXPR_identity_function t -> "identity_function["^sbt bsym_table t^"]"
   | BEXPR_ref (i,ts) -> "&" ^ sid i ^ string_of_inst "ref" bsym_table ts
   | BEXPR_new e -> "new " ^ se e
   | BEXPR_class_new (t,e) -> "new " ^ sbt bsym_table t ^ "(" ^ se e ^ ")"
@@ -2252,11 +2307,12 @@ and string_of_dcl level name seq vs (s:dcl_t) =
     string_of_asm_compound level asms
 
   | DCL_union (cs) ->
-    let string_of_union_component (name,v,vs,ty) =
+    let string_of_union_component (name,v,vs,d,c) =
       (spaces (level+1)) ^
       "|" ^ string_of_id name ^
       (match v with | None -> "" | Some i -> "="^si i) ^
-      special_string_of_typecode ty
+      special_string_of_typecode d ^ (match c with | None -> "" | Some c -> " => " ^
+        string_of_typecode c)
     in
     sl ^ "union " ^ string_of_id name ^ seq ^ string_of_vs vs ^
     " = " ^
@@ -2317,11 +2373,16 @@ and string_of_dcl level name seq vs (s:dcl_t) =
     string_of_named_reqs reqs ^
     ";"
 
-  | DCL_reduce (ps, e1,e2) ->
+  | DCL_reduce reds ->
     sl ^
-    "reduce " ^ string_of_id name ^ seq ^ string_of_vs vs ^
-    "("^ string_of_basic_parameters ps ^"): " ^
-    string_of_expr e1 ^ " => " ^ string_of_expr e2 ^ ";"
+    "reduce " ^ string_of_id name ^ seq ^ 
+    catmap ("\n  | ") (fun (vs, ps, e1,e2) ->
+      string_of_vs vs ^
+      "("^ string_of_basic_parameters ps ^"): " ^
+      string_of_expr e1 ^ " => " ^ string_of_expr e2 
+    )
+    reds
+    ^ ";"
 
   | DCL_axiom (ps, e1) ->
     sl ^
@@ -2455,7 +2516,7 @@ and string_of_bbdcl bsym_table bbdcl index : string =
     (if is_proc then "proc " else "fun ") ^
     name ^ string_of_bvs vs ^
     "(" ^ (string_of_bparameters bsym_table ps) ^ ")" ^
-    (if effects = BTYP_tuple [] then
+    (if effects = Flx_btype.btyp_unit () then
       (if is_proc then "" else ": " ^ sobt res)
      else
       (if is_proc then "["^sobt effects^"]" else ":["^sobt effects^"] " ^ sobt res)
@@ -2521,10 +2582,11 @@ and string_of_bbdcl bsym_table bbdcl index : string =
     ":"
 
   | BBDCL_union (vs,cs) ->
-    let string_of_union_component (name,v,ty) =
+    let string_of_union_component (name,v,evs,d,c,gadt) =
       "  " ^ "| " ^ string_of_id name ^
      "="^si v^
-      special_string_of_btypecode bsym_table ty
+      special_string_of_btypecode bsym_table evs d ^ " => " ^
+      sobt c ^ (match gadt with | true -> ": GADT" | false -> "")
     in
     "union " ^ name ^ string_of_bvs vs ^ " = " ^
     "{\n" ^

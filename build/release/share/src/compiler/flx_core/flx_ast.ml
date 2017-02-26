@@ -67,6 +67,7 @@ and typecode_t =
   | TYP_unitsum of int                         (** sum of units  *)
   | TYP_sum of typecode_t list                 (** numbered sum type *)
   | TYP_intersect of typecode_t list           (** intersection type *)
+  | TYP_union of typecode_t list               (** union type *)
   | TYP_record of (Flx_id.t * typecode_t) list
   | TYP_polyrecord of (Flx_id.t * typecode_t) list * typecode_t
   | TYP_variant of (Flx_id.t * typecode_t) list (** anon sum *)
@@ -103,6 +104,7 @@ and typecode_t =
   | TYP_type_match of typecode_t * (typecode_t * typecode_t) list
   | TYP_type_extension of Flx_srcref.t * typecode_t list * typecode_t
   | TYP_tuple_cons of Flx_srcref.t * typecode_t * typecode_t
+  | TYP_tuple_snoc of Flx_srcref.t * typecode_t * typecode_t
 
 and raw_typeclass_insts_t = qualified_name_t list
 and vs_aux_t = {
@@ -134,7 +136,6 @@ and expr_t =
   | EXPR_lookup of Flx_srcref.t * (expr_t * Flx_id.t * typecode_t list)
   | EXPR_apply of Flx_srcref.t * (expr_t * expr_t)
   | EXPR_tuple of Flx_srcref.t * expr_t list
-  | EXPR_tuple_cons of Flx_srcref.t * expr_t * expr_t
   | EXPR_record of Flx_srcref.t * (Flx_id.t * expr_t) list
   | EXPR_record_type of Flx_srcref.t * (Flx_id.t * typecode_t) list
   | EXPR_polyrecord of Flx_srcref.t * (Flx_id.t * expr_t) list * expr_t
@@ -153,6 +154,7 @@ and expr_t =
   | EXPR_product of Flx_srcref.t * expr_t list
   | EXPR_sum of Flx_srcref.t * expr_t list
   | EXPR_intersect of Flx_srcref.t * expr_t list
+  | EXPR_union of Flx_srcref.t * expr_t list
   | EXPR_isin of Flx_srcref.t * (expr_t * expr_t)
   | EXPR_orlist of Flx_srcref.t * expr_t list
   | EXPR_andlist of Flx_srcref.t * expr_t list
@@ -204,9 +206,14 @@ and expr_t =
   | EXPR_as_var of Flx_srcref.t * (expr_t * Flx_id.t)
   | EXPR_match of Flx_srcref.t * (expr_t * (pattern_t * expr_t) list)
 
-  (* this extracts the tail of a tuple *)
+  | EXPR_tuple_cons of Flx_srcref.t * expr_t * expr_t
   | EXPR_get_tuple_tail of Flx_srcref.t * expr_t
   | EXPR_get_tuple_head of Flx_srcref.t * expr_t
+
+  | EXPR_tuple_snoc of Flx_srcref.t * expr_t * expr_t
+  | EXPR_get_tuple_body of Flx_srcref.t * expr_t
+  | EXPR_get_tuple_last of Flx_srcref.t * expr_t
+
 
   | EXPR_typeof of Flx_srcref.t * expr_t
   | EXPR_cond of Flx_srcref.t * (expr_t * expr_t * expr_t)
@@ -236,6 +243,7 @@ and pattern_t =
   | PAT_name of Flx_srcref.t * Flx_id.t
   | PAT_tuple of Flx_srcref.t * pattern_t list
   | PAT_tuple_cons of Flx_srcref.t * pattern_t * pattern_t
+  | PAT_tuple_snoc of Flx_srcref.t * pattern_t * pattern_t
   | PAT_any of Flx_srcref.t
   | PAT_setform_any of Flx_srcref.t
     (* second list is group bindings 1 .. n-1: EXCLUDES 0 cause we can use 'as' for that ?? *)
@@ -406,10 +414,13 @@ and statement_t =
   | STMT_reduce of
       Flx_srcref.t *
       Flx_id.t *
-      vs_list_t *
-      simple_parameter_t list *
-      expr_t *
-      expr_t
+      (
+        vs_list_t *
+        simple_parameter_t list *
+        expr_t *
+        expr_t
+      ) list
+
   | STMT_axiom of
       Flx_srcref.t *
       Flx_id.t *
@@ -460,7 +471,7 @@ and statement_t =
       Flx_srcref.t *
       Flx_id.t *
       vs_list_t *
-      (Flx_id.t * int option * vs_list_t * typecode_t) list
+      (Flx_id.t * int option * vs_list_t * typecode_t * typecode_t option) list
   | STMT_struct of
       Flx_srcref.t *
       Flx_id.t *
@@ -653,6 +664,8 @@ type exe_t =
   | EXE_endtry
   | EXE_catch of Flx_id.t * typecode_t
   | EXE_proc_return_from of string
+  | EXE_begin_match_case
+  | EXE_end_match_case
 
 type sexe_t = Flx_srcref.t * exe_t
 
@@ -690,6 +703,7 @@ let src_of_typecode = function
   | TYP_patany s
   | TYP_type_extension (s,_,_)
   | TYP_tuple_cons (s,_,_)
+  | TYP_tuple_snoc (s,_,_)
   -> s
 
   | TYP_label
@@ -697,6 +711,7 @@ let src_of_typecode = function
   | TYP_unitsum _
   | TYP_sum _
   | TYP_intersect _
+  | TYP_union _
   | TYP_record _
   | TYP_polyrecord _
   | TYP_variant _
@@ -743,6 +758,7 @@ let src_of_expr (e : expr_t) = match e with
   | EXPR_product (s,_)
   | EXPR_sum (s,_)
   | EXPR_intersect (s,_)
+  | EXPR_union (s,_)
   | EXPR_isin (s,_)
   | EXPR_orlist (s,_)
   | EXPR_andlist (s,_)
@@ -759,7 +775,6 @@ let src_of_expr (e : expr_t) = match e with
   | EXPR_unlikely (s,_)
   | EXPR_literal (s,_)
   | EXPR_tuple (s,_)
-  | EXPR_tuple_cons (s,_,_)
   | EXPR_record (s,_)
   | EXPR_polyrecord (s,_,_)
   | EXPR_remove_fields (s,_,_)
@@ -794,8 +809,13 @@ let src_of_expr (e : expr_t) = match e with
   | EXPR_range_check (s,_,_,_)
   | EXPR_not (s,_)
   | EXPR_extension (s, _, _)
+
+  | EXPR_tuple_cons (s,_,_)
   | EXPR_get_tuple_tail (s,_)
   | EXPR_get_tuple_head (s,_)
+  | EXPR_tuple_snoc (s,_,_)
+  | EXPR_get_tuple_body (s,_)
+  | EXPR_get_tuple_last (s,_)
   -> s
 
 let src_of_stmt (e : statement_t) = match e with
@@ -815,7 +835,7 @@ let src_of_stmt (e : statement_t) = match e with
   | STMT_assert (s,_)
   | STMT_init (s,_,_)
   | STMT_function (s,_,_,_,_,_,_,_)
-  | STMT_reduce (s,_,_,_,_,_)
+  | STMT_reduce (s,_,_)
   | STMT_axiom (s,_,_,_,_)
   | STMT_lemma (s,_,_,_,_)
   | STMT_curry (s,_,_,_,_,_,_,_,_)
@@ -891,6 +911,7 @@ let src_of_pat (e : pattern_t) = match e with
   | PAT_name (s,_)
   | PAT_tuple (s,_)
   | PAT_tuple_cons (s,_,_)
+  | PAT_tuple_snoc (s,_,_)
   | PAT_any s
   | PAT_setform_any s
   | PAT_const_ctor (s,_)

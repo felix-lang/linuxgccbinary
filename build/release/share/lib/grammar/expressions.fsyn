@@ -1,4 +1,4 @@
-#line 1286 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
+#line 1290 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
 syntax expressions {
   priority
     let_pri <

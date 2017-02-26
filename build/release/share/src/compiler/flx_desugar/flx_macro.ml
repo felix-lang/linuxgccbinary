@@ -146,6 +146,7 @@ let fix_pattern counter pat =
   | PAT_coercion (sr, p, t) -> PAT_coercion (sr, aux p, t)
   | PAT_tuple (sr,ps) -> PAT_tuple (sr,List.map aux ps)
   | PAT_tuple_cons (sr,a,b) -> PAT_tuple_cons (sr,aux a,aux b)
+  | PAT_tuple_snoc (sr,a,b) -> PAT_tuple_snoc (sr,aux a,aux b)
   | PAT_nonconst_ctor (sr,qn,p) -> PAT_nonconst_ctor (sr,qn,aux p)
   | PAT_ho_ctor (sr,qn,es,p) -> PAT_ho_ctor (sr,qn,es,aux p)
   | PAT_nonconst_variant (sr,s,p) -> PAT_nonconst_variant (sr,s,aux p)
@@ -178,6 +179,7 @@ let rec get_pattern_vars pat =
   | PAT_nonconst_variant (_,_,p) -> get_pattern_vars p
   | PAT_tuple (_,ps) -> List.concat (List.map get_pattern_vars ps)
   | PAT_tuple_cons (sr,a,b) -> get_pattern_vars a @ get_pattern_vars b
+  | PAT_tuple_snoc (sr,a,b) -> get_pattern_vars a @ get_pattern_vars b
   | PAT_record (_,ps) -> List.concat(List.map get_pattern_vars (List.map snd ps))
   | PAT_polyrecord (_,ps,r) -> r :: List.concat(List.map get_pattern_vars (List.map snd ps))
   | PAT_alt _ -> assert false
@@ -241,6 +243,10 @@ let expand_pattern_branches pes =
     | PAT_tuple_cons (sr,a,b) ->  
       map (fun (a,b) -> PAT_tuple_cons (sr,a,b)) (cart2 (aux a) (aux b))
 
+    | PAT_tuple_snoc (sr,a,b) ->  
+      map (fun (a,b) -> PAT_tuple_snoc (sr,a,b)) (cart2 (aux a) (aux b))
+
+
     | PAT_nonconst_ctor (sr,qn,p) -> map (fun p->PAT_nonconst_ctor (sr,qn,p)) (aux p)
     | PAT_ho_ctor (sr,qn,es,p) -> map (fun p->PAT_ho_ctor (sr,qn,es,p)) (aux p)
     | PAT_nonconst_variant (sr,s,p) -> map (fun p->PAT_nonconst_variant (sr,s,p)) (aux p)
@@ -287,6 +293,7 @@ let alpha_pat local_prefix seq fast_remap remap expand_expr pat =
   | PAT_nonconst_variant (sr,n,p) -> PAT_nonconst_variant (sr, n, aux p)
   | PAT_tuple (sr,ps) -> PAT_tuple (sr, List.map aux ps)
   | PAT_tuple_cons (sr,a,b) -> PAT_tuple_cons (sr, aux a, aux b)
+  | PAT_tuple_snoc (sr,a,b) -> PAT_tuple_snoc (sr, aux a, aux b)
   | PAT_record (sr, ps) -> PAT_record (sr, List.map (fun (id,p) -> id, aux p) ps)
   | PAT_polyrecord (sr, ps, r) -> PAT_polyrecord (sr, List.map (fun (id,p) -> id, aux p) ps, ren r)
   | p -> p
@@ -584,9 +591,13 @@ and expand_expr recursion_limit local_prefix seq (macros:macro_dfn_t list) (e:ex
   (* the name here is just for diagnostics *)
   | EXPR_index (sr, n, i) -> EXPR_index (sr,n,i)
   | EXPR_intersect (sr, es) -> EXPR_intersect (sr, List.map me es)
+  | EXPR_union (sr, es) -> EXPR_union (sr, List.map me es)
   | EXPR_isin (sr,(a,b)) -> EXPR_isin (sr, (me a, me b))
+
   | EXPR_get_tuple_tail (sr, e) -> EXPR_get_tuple_tail (sr, me e)
   | EXPR_get_tuple_head (sr, e) -> EXPR_get_tuple_head (sr, me e)
+  | EXPR_get_tuple_body (sr, e) -> EXPR_get_tuple_body (sr, me e)
+  | EXPR_get_tuple_last (sr, e) -> EXPR_get_tuple_last (sr, me e)
 
   | EXPR_lookup (sr, (e1, name,ts)) ->
       EXPR_lookup (sr,(me e1, mi sr name, List.map (mt sr) ts))
@@ -599,6 +610,8 @@ and expand_expr recursion_limit local_prefix seq (macros:macro_dfn_t list) (e:ex
 
   | EXPR_tuple (sr, es) -> EXPR_tuple (sr, List.map me es)
   | EXPR_tuple_cons (sr, eh, et) -> EXPR_tuple_cons (sr, me eh, me et)
+  | EXPR_tuple_snoc (sr, eh, et) -> EXPR_tuple_snoc (sr, me eh, me et)
+
   | EXPR_record (sr, es) ->
     let all_blank = fold_left (fun acc (s,_) -> acc && s = "") true es in
     if all_blank then EXPR_tuple (sr, List.map snd es) 
@@ -667,21 +680,34 @@ and expand_expr recursion_limit local_prefix seq (macros:macro_dfn_t list) (e:ex
   | EXPR_variant_arg (sr, (s, e1)) -> EXPR_variant_arg (sr,(s, me e1))
   | EXPR_case_arg (sr, (i, e1)) ->  EXPR_case_arg (sr,(i,me e1))
   | EXPR_letin (sr, (pat, e1, e2)) -> 
-    let e1 = me e1 in
     let pes = [pat, e2] in
     let pes = expand_pattern_branches pes in
     let pes =
       List.map
       (fun (pat,e) ->
         let pat = fix_pattern seq pat in
-        pat,
         let pvs = get_pattern_vars pat in
-        let pr = protect sr pvs in
-        expand_expr recursion_limit local_prefix seq (pr @ macros) e
+        let pvs' =  (* new parameter names *)
+          List.map
+          (fun s -> let b = !seq in incr seq; s^"_param_" ^ local_prefix ^ "_" ^ string_of_int b)
+          pvs
+        in
+        let fast_remap = List.combine pvs pvs' in
+        let remap = 
+          List.map2
+          (fun x y -> (x,MName y))
+          pvs pvs'
+        in
+        (* alpha convert pattern variable names *)
+        let pat' = alpha_pat local_prefix seq fast_remap (remap @ macros) expand_expr pat in
+        (* let pr = protect sr pvs in *)
+        let e' = expand_expr recursion_limit local_prefix seq (remap @ macros) e in
+        pat',e'
       )
       pes
     in
-    EXPR_match (sr,(e1, pes))
+    EXPR_match (sr,(me e1, pes))
+
 
   | EXPR_get_n (sr, (i, e1)) ->  EXPR_get_n (sr,(i,me e1))
   | EXPR_get_named_variable (sr, (i, e1)) ->  EXPR_get_named_variable (sr,(i,me e1))
@@ -694,10 +720,23 @@ and expand_expr recursion_limit local_prefix seq (macros:macro_dfn_t list) (e:ex
       List.map
       (fun (pat,e) ->
         let pat = fix_pattern seq pat in
-        pat,
         let pvs = get_pattern_vars pat in
-        let pr = protect sr pvs in
-        expand_expr recursion_limit local_prefix seq (pr @ macros) e
+        let pvs' =  (* new parameter names *)
+          List.map
+          (fun s -> let b = !seq in incr seq; s^"_param_" ^ local_prefix ^ "_" ^ string_of_int b)
+          pvs
+        in
+        let fast_remap = List.combine pvs pvs' in
+        let remap = 
+          List.map2
+          (fun x y -> (x,MName y))
+          pvs pvs'
+        in
+        (* alpha convert pattern variable names *)
+        let pat' = alpha_pat local_prefix seq fast_remap (remap @ macros) expand_expr pat in
+        (* let pr = protect sr pvs in *)
+        let e' = expand_expr recursion_limit local_prefix seq (remap @ macros) e in
+        pat',e'
       )
       pes
     in
@@ -823,7 +862,10 @@ and subst_or_expand recurse recursion_limit local_prefix seq reachable macros (s
   | STMT_comment _  ->  tack st
 
   | STMT_union (sr, id, vs, idts ) ->
-    let idts = List.map (fun (id,v,vs,t) -> id,v,vs,mt sr t) idts in
+    let idts = List.map (fun (id,v,vs,d,c) -> 
+      id,v,vs,mt sr d, (match c with | None-> None | Some c -> Some (mt sr c))) 
+      idts 
+    in
     tack (STMT_union (sr, mi sr id, vs, idts))
 
   | STMT_struct (sr, id, vs, idts) ->
@@ -917,9 +959,13 @@ and subst_or_expand recurse recursion_limit local_prefix seq reachable macros (s
   | STMT_trace (sr,v,s)  ->  ctack st
   | STMT_nop (sr, s) ->  ()
 
-  | STMT_reduce (sr, id, vs, ps, e1, e2) ->
-    let ps = List.map (fun (s,t)-> s,mt sr t) ps in
-    tack(STMT_reduce (sr, mi sr id, vs, ps, me e1, me e2))
+  | STMT_reduce (sr, id, reds) ->
+    let reds = map (fun (vs, ps, e1, e2) -> 
+      let ps = List.map (fun (s,t)-> s,mt sr t) ps in
+      vs,ps,me e1, me e2)
+    reds 
+    in 
+    tack(STMT_reduce (sr, mi sr id, reds))
 
   | STMT_axiom (sr, id, vs, psp, e1) ->
     let e1 = match e1 with

@@ -18,7 +18,7 @@ type desugar_state_t = {
   name: string;
   macro_state: Flx_macro.macro_state_t;
   fresh_bid: unit -> bid_t;
-  mutable include_file_cache: string list;
+  mutable include_file_cache: (Flx_srcref.t * string) list;
 }
 
 (** Construct a desugar state value needed for desugaring. *)
@@ -107,9 +107,7 @@ let rec rett_fixparams rex ps sr =
 
 let rec rex rst mkreqs map_reqs (state:desugar_state_t) name (e:expr_t) : asm_t list * expr_t =
   let rex e = rex rst mkreqs map_reqs state name e in
-(*
   let rsts sts = List.concat (List.map (rst state name `Private dfltvs) sts) in
-*)
   let sr = src_of_expr e in
   let seq () = state.fresh_bid () in
   match e with
@@ -122,6 +120,7 @@ let rec rex rst mkreqs map_reqs (state:desugar_state_t) name (e:expr_t) : asm_t 
   | EXPR_effector _
   | EXPR_ellipsis _
   | EXPR_intersect _
+  | EXPR_union _
   | EXPR_isin _
     ->
     clierrx "[flx_desugar/flx_desugar_expr.ml:127: E326] " sr ("[rex] Unexpected " ^ string_of_expr e)
@@ -191,6 +190,15 @@ let rec rex rst mkreqs map_reqs (state:desugar_state_t) name (e:expr_t) : asm_t 
   | EXPR_get_tuple_head (sr, e) ->
     let l1,x1 = rex e in 
     l1,EXPR_get_tuple_head (sr,x1)
+
+  | EXPR_get_tuple_body (sr, e) ->
+    let l1,x1 = rex e in 
+    l1,EXPR_get_tuple_body (sr,x1)
+
+  | EXPR_get_tuple_last (sr, e) ->
+    let l1,x1 = rex e in 
+    l1,EXPR_get_tuple_last (sr,x1)
+
 
   | EXPR_as_var (sr,(e,name)) ->
     let l1,x1 = rex e in
@@ -453,6 +461,10 @@ let rec rex rst mkreqs map_reqs (state:desugar_state_t) name (e:expr_t) : asm_t 
     let l2,x2 = rex et in
     l1 @ l2, EXPR_tuple_cons (sr,x1,x2)
 
+  | EXPR_tuple_snoc (sr,eh,et) ->
+    let l1,x1 = rex eh in
+    let l2,x2 = rex et in
+    l1 @ l2, EXPR_tuple_snoc (sr,x1,x2)
 
   | EXPR_record (sr,es) ->
     let ss,es = List.split es in
@@ -561,7 +573,7 @@ let rec rex rst mkreqs map_reqs (state:desugar_state_t) name (e:expr_t) : asm_t 
   *)
 
   | EXPR_match (sr,(e,pss)) ->
-    Flx_match.gen_match rex seq name sr e pss
+    Flx_match.gen_match rex rsts seq name sr e pss
 
 (* remove blocks *)
 (* parent vs is containing module vs .. only for modules *)

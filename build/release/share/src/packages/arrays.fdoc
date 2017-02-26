@@ -460,7 +460,10 @@ open class Farray
     return o;
   }
 
-
+  // not very efficient!
+  fun rev_map[V,N,U] (_f:V->U) (x:array[V,N]):array[U,N] => 
+    rev (map _f x)
+  ;
 
   // Note: for many loops below, note we're using unsigned values
   // iterating from 0 to N-1. Subtraction N-1 fails for n == 0
@@ -1086,6 +1089,41 @@ Generally, this class is very incomplete.
     //$ provided the element type is convertible.
     fun str (x:darray[T])=> str (_repr_ x)*.a;
   }
+
+@h2 Enable map on darray objects.
+@tangle darray.flx
+  //$ Traditional map darray to darray.
+  fun map[T, U] (_f:T->U) (arr:darray[T]): darray[U] = {
+    var o = darray[U]();
+
+    if arr.len > 0uz do
+      for var i in 0uz upto arr.len - 1uz do
+      push_back (o, _f arr.i);
+      done
+    done
+    
+    return o;
+  }
+
+@h2 Enable filter on darray objects
+@tangle darray.flx
+
+  //$ Return a sub list with elements satisfying the given predicate.
+  fun filter[T] (P:T -> bool) (arr:darray[T]) : darray[T] =
+  {
+    var o = darray[T]();
+
+    if arr.len > 0uz do
+      for var i in 0uz upto arr.len - 1uz do
+        if (P(arr.i)) do
+      	  push_back (o, arr.i);
+        done
+      done
+    done
+    
+    return o;
+  }
+
 
 }
 

@@ -14,6 +14,8 @@ type extract_t =
   | Proj_s of Flx_srcref.t * string          (* record projection name *)
   | Proj_head of Flx_srcref.t                (* tuple_cons head extractor  *)
   | Proj_tail of Flx_srcref.t                (* tuple_cons tail extractor  *)
+  | Proj_body of Flx_srcref.t                (* tuple_snoc body extractor  *)
+  | Proj_last of Flx_srcref.t                (* tuple_snoc last extractor  *)
   | Polyrec_tail of Flx_srcref.t * string list (* list of fields to exclude! *)
   | Expr of Flx_srcref.t * expr_t
 
@@ -47,6 +49,8 @@ let gen_extractor
     | Proj_s (sr,s) -> EXPR_get_named_variable (sr,(s,marg))
     | Proj_tail (sr) -> EXPR_get_tuple_tail (sr,(marg))
     | Proj_head (sr) -> EXPR_get_tuple_head (sr,(marg))
+    | Proj_body (sr) -> EXPR_get_tuple_body (sr,(marg))
+    | Proj_last (sr) -> EXPR_get_tuple_last (sr,(marg))
     | Polyrec_tail (sr,flds) -> EXPR_remove_fields (sr,marg,flds)
     | Expr (sr,e) -> e
   )
@@ -75,13 +79,26 @@ let rec subst (vars:psym_table_t) (e:expr_t) mv : expr_t =
      name the types of the arguments now)
   *)
   match e with
-  | EXPR_patvar _
-  | EXPR_patany _
+  | EXPR_noexpand (_,e) -> subst e
+
+  | EXPR_patvar _ 
+  | EXPR_patany _ ->
+    let sr = src_of_expr e in
+    syserr sr ("flx_desugar/flx_desugar_pat:subst]1 found EXPR_patvar or EXPR_patany " ^
+    "in pattern when clause\n" ^
+    "should have been translated by compiler earlier")
+
   | EXPR_vsprintf _
   | EXPR_interpolate _
-  | EXPR_type_match _
-  | EXPR_noexpand _
-  | EXPR_expr _
+  | EXPR_type_match _ ->
+      let sr = src_of_expr e in
+      clierrx "[flx_desugar/flx_desugar_pat.ml:107: E341] " sr 
+      ("[desugar_pat:subst]4 Not expected in pattern when clause: " ^ string_of_expr e); 
+  | EXPR_expr _ ->
+      let sr = src_of_expr e in
+      clierrx "[flx_desugar/flx_desugar_pat.ml:107: E341] " sr 
+      ("[desugar_pat:subst]6 Not expected EXPR_expr in pattern when clause: " ^ string_of_expr e); 
+
   | EXPR_typeof _
   | EXPR_void _
   | EXPR_typed_case _
@@ -92,16 +109,29 @@ let rec subst (vars:psym_table_t) (e:expr_t) mv : expr_t =
   | EXPR_longarrow _
   | EXPR_ellipsis _
   | EXPR_intersect _
+  | EXPR_union _
   | EXPR_isin _ (* only used in type constraints *)
   | EXPR_callback _
+    ->
+      let sr = src_of_expr e in
+      clierrx "[flx_desugar/flx_desugar_pat.ml:107: E341] " sr 
+      ("[desugar_pat:subst]7 Not expected in pattern when clause: " ^ string_of_expr e); 
+
   | EXPR_record_type _
   | EXPR_polyrecord_type _
   | EXPR_variant_type _
   | EXPR_extension _
   | EXPR_get_tuple_tail _
   | EXPR_get_tuple_head _
+  | EXPR_get_tuple_body _
+  | EXPR_get_tuple_last _
   | EXPR_label _
   | EXPR_rnprj _
+    ->
+      let sr = src_of_expr e in
+      clierrx "[flx_desugar/flx_desugar_pat.ml:107: E341] " sr 
+      ("[desugar_pat:subst]8 Not expected in pattern when clause: " ^ string_of_expr e); 
+
   | EXPR_remove_fields _
   | EXPR_typecase_match _
   | EXPR_ho_ctor_arg _
@@ -109,9 +139,11 @@ let rec subst (vars:psym_table_t) (e:expr_t) mv : expr_t =
   | EXPR_replace_fields _
     ->
       let sr = src_of_expr e in
-      clierrx "[flx_desugar/flx_mbind.ml:107: E341] " sr ("[mbind:subst] Not expected in pattern when clause: " ^ string_of_expr e); 
+      clierrx "[flx_desugar/flx_desugar_pat.ml:107: E341] " sr 
+      ("[desugar_pat:subst]9 Not expected in pattern when clause: " ^ string_of_expr e); 
 
   | EXPR_tuple_cons (sr, eh, et) -> EXPR_tuple_cons (sr, subst eh, subst et)
+  | EXPR_tuple_snoc (sr, eh, et) -> EXPR_tuple_snoc (sr, subst eh, subst et)
   | EXPR_superscript (sr,(e1,e2)) -> EXPR_superscript (sr, (subst e1, subst e2))
   | EXPR_product (sr,ls) -> EXPR_product (sr,map subst ls)
   | EXPR_sum (sr,ls) -> EXPR_sum (sr, map subst ls)
@@ -172,7 +204,7 @@ let rec subst (vars:psym_table_t) (e:expr_t) mv : expr_t =
   | EXPR_match_ctor _
     ->
     let sr = src_of_expr e in
-    clierrx "[flx_desugar/flx_mbind.ml:170: E342] " sr "[subst] not implemented in when part of pattern"
+    clierrx "[flx_desugar/flx_desugar_pat.ml:170: E342] " sr "[subst] not implemented in when part of pattern"
 
   | EXPR_coercion _ -> failwith "subst: coercion"
 
@@ -239,6 +271,16 @@ let rec get_pattern_vars
 
     let sr = src_of_pat pat2 in
     let extractor' = Proj_tail (sr) :: extractor in
+    get_pattern_vars vars pat2 extractor'
+
+
+  | PAT_tuple_snoc (sr,pat1,pat2) ->
+    let sr = src_of_pat pat1 in
+    let extractor' = Proj_body (sr) :: extractor in
+    get_pattern_vars vars pat1 extractor';
+
+    let sr = src_of_pat pat2 in
+    let extractor' = Proj_last (sr) :: extractor in
     get_pattern_vars vars pat2 extractor'
 
   | PAT_nonconst_ctor (sr,name,pat) ->
@@ -350,7 +392,7 @@ let rec gen_match_check pat (arg:expr_t) =
   | PAT_alt _
   | PAT_expr _ -> assert false
   | PAT_literal (sr,s) -> apl2 sr "eq" (mklit sr s) arg
-  | PAT_none sr -> clierrx "[flx_desugar/flx_mbind.ml:319: E343] " sr "Empty pattern not allowed"
+  | PAT_none sr -> clierrx "[flx_desugar/flx_desugar_pat.ml:319: E343] " sr "Empty pattern not allowed"
 
   (* ranges *)
   | PAT_range (sr,l1,l2) ->
@@ -483,5 +525,14 @@ let rec gen_match_check pat (arg:expr_t) =
        how many components are involved. So p2 had better be a wildcard!
     *)
     gen_match_check p1 (EXPR_get_n (sr,(0, arg)))
+
+  | PAT_tuple_snoc (sr, p1, p2) -> 
+    (* Not clear how to check p2 matches the rest of the argument,
+       since we don't know the type of the argument, we don't know
+       how many components are involved. So p1 had better be a wildcard!
+    *)
+    
+(* OUCH! We need get_n to work with -1, meaning last component *)
+    gen_match_check p2 (EXPR_get_n (sr,(-1, arg)))
 
 

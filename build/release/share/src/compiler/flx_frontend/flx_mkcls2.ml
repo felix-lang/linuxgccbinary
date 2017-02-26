@@ -133,7 +133,9 @@ let gen_composite_closure_entry state bsym_table sr (f1,t1) (f2,t2) =
 *)
 
 let rec chk_expr state bsym_table nutab sr exe e : Flx_bexpr.t = 
-(* print_endline ("Check expr " ^ sbe bsym_table e); *)
+(*
+print_endline ("Closure wrapper generator: Check expr " ^ sbe bsym_table e);
+*)
   let sbx exe = string_of_bexe bsym_table 0 exe in
   let ce e = chk_expr state bsym_table nutab sr exe e in 
   match e with
@@ -144,7 +146,12 @@ let rec chk_expr state bsym_table nutab sr exe e : Flx_bexpr.t =
       | BBDCL_external_fun _ -> bexpr_apply_prim rt (i,ts,ce e)
       | BBDCL_struct _  -> bexpr_apply_struct rt (i,ts,ce e)
       | BBDCL_cstruct  _  -> bexpr_apply_struct rt (i,ts,ce e)
-      | BBDCL_nonconst_ctor  _  -> bexpr_apply_struct rt (i,ts,ce e)
+      | BBDCL_nonconst_ctor  _  -> 
+(*
+        print_endline ("Closure of non-const ctor");
+*)
+        bexpr_apply_struct rt (i,ts,ce e)
+
       | BBDCL_fun _ -> bexpr_apply_direct rt (i,ts,ce e)
       | _ -> assert false 
     end
@@ -389,6 +396,24 @@ end;
     let bbdcl = bbdcl_fun ([],[],([param],None),c,noeffects,exes) in
     Flx_bsym_table.update_bbdcl nutab closure_bid bbdcl;
     bexpr_closure t (closure_bid, [])
+
+  | BEXPR_identity_function t,_ ->
+(*
+print_endline ("[flx_mkcls2] Generating identity for " ^ sbt bsym_table t);
+*)
+    let ft = btyp_function (t,t) in
+    let closure_bid = fresh_bid state.syms.counter in
+    let closure_name = ("_id_" ^ string_of_int closure_bid) in
+    Flx_bsym_table.add nutab closure_bid None 
+      (Flx_bsym.create ~sr:sr closure_name (bbdcl_invalid ()))
+    ;
+
+    let param, arg = make_inner_function state nutab closure_bid sr [] [] [t] in
+    let exes = [bexe_fun_return (sr,arg) ] in
+    let bbdcl = bbdcl_fun ([],[],([param],None),t,noeffects,exes) in
+    Flx_bsym_table.update_bbdcl nutab closure_bid bbdcl;
+
+    bexpr_closure ft (closure_bid, [])
 
 
   | e -> 

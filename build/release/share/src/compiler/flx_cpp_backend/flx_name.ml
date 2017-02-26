@@ -250,6 +250,7 @@ let rec cpp_type_classname syms bsym_table t =
   | BTYP_array _ -> "_at" ^ cid_of_bid (tix t)
   | BTYP_tuple _ -> "_tt" ^ cid_of_bid (tix t)
   | BTYP_tuple_cons _ -> "_tt" ^ cid_of_bid (tix t)
+  | BTYP_tuple_snoc _ -> "_tt" ^ cid_of_bid (tix t)
 (*  | BTYP_tuple ts -> "_tt"^string_of_int (List.length ts)^"<" ^ catmap "," tn ts ^ ">"  *)
   | BTYP_record _  -> "_art" ^ cid_of_bid (tix t)
 (*
@@ -284,10 +285,12 @@ let rec cpp_type_classname syms bsym_table t =
       | _ -> "_unk_"
     in
     begin match bbdcl with 
-    | BBDCL_union (vs, [id,n,t']) -> 
+(*
+    | BBDCL_union (vs, [id,n,[],t',_]) -> 
+print_endline ("[flx_name] One component union should have been removed");
       let t'' = tsubst sr vs ts t' in
       cpp_type_classname syms bsym_table t''
-
+*)
     | BBDCL_union _ ->
       begin match Flx_vrep.cal_variant_rep bsym_table t with
       | Flx_vrep.VR_self -> print_endline "WARNING cpp_type_classname of VR_self (2)"; assert false
@@ -344,13 +347,16 @@ let rec cpp_type_classname syms bsym_table t =
     else
       "_poly_" ^ cid_of_bid i ^ "t_" ^ cid_of_bid (tix t)
   end
+  | BTYP_rev _
   | BTYP_polyrecord _
   | BTYP_intersect _
+  | BTYP_union _
 
   | BTYP_type _
   | BTYP_type_tuple _
   | BTYP_type_function _
   | BTYP_type_apply _
+  | BTYP_type_map _
   | BTYP_type_match _
 
   | BTYP_type_set _
@@ -431,9 +437,12 @@ and cpp_structure_name syms bsym_table t =
       | _ -> "_unk_"
     in
     begin match bbdcl with 
-    | BBDCL_union (vs, [id,n,t']) -> 
+    (* should have been removed by strabs *)
+    | BBDCL_union (vs, [id,n,[],t',_,false]) -> assert false
+(*
       let t'' = tsubst sr vs ts t' in
       cpp_type_classname syms bsym_table t''
+*)
 
     | BBDCL_union _ ->
       begin match Flx_vrep.cal_variant_rep bsym_table t with
@@ -478,17 +487,16 @@ and cpp_typename syms bsym_table t =
   | BTYP_function _ -> cpp_type_classname syms bsym_table t ^ "*"
   | BTYP_cfunction _ -> cpp_type_classname syms bsym_table t ^ "*"
   | BTYP_pointer t -> cpp_typename syms bsym_table t ^ "*"
+(*
   | BTYP_inst (i,ts) ->
     let bsym = Flx_bsym_table.find bsym_table i in
     let fname = Flx_bsym.id bsym in
     let bbdcl = Flx_bsym.bbdcl bsym in
     let sr = Flx_bsym.sr bsym in
     begin match bbdcl with
-    | BBDCL_union (vs, [id,n,t']) -> 
-      let t'' = tsubst sr vs ts t' in
-      cpp_typename  syms bsym_table t''
     | _ -> cpp_type_classname syms bsym_table t
     end
+*)
 
   | _ -> cpp_type_classname syms bsym_table t
 

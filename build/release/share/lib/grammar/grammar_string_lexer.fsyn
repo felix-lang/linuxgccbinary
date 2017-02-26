@@ -1,4 +1,4 @@
-#line 2655 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
+#line 2659 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
 
 SCHEME """
 (define (decode-string s)

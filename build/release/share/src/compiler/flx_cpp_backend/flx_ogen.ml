@@ -60,6 +60,14 @@ let scan_bexpr syms bsym_table allocable_types e : unit =
       in
       Hashtbl.replace allocable_types cls index;
 
+    | BEXPR_identity_function t,ft -> 
+      let index = 
+        try Flx_treg.find_type_index syms bsym_table ft
+        with Not_found -> failwith ("[scan_expr] Can't find identity function of type " ^
+         sbt bsym_table ft ^ " in registry")
+      in
+      Hashtbl.replace allocable_types ft index;
+
     | x -> ()
   in
   Flx_bexpr.iter ~f_bexpr:aux e
@@ -285,7 +293,8 @@ bcat s ("\n//ABSTRACT TYPE " ^ name ^"\n");
           clierrx "[flx_cpp_backend/flx_ogen.ml:285: E311] " (Flx_bsym.sr bsym)
           ("[ogen] attempt to allocate an incomplete type: '" ^ Flx_bsym.id bsym ^"'")
 
-      | BBDCL_union (vs,[id,n,t']) -> 
+      | BBDCL_union (vs,[id,n,[],t',_,_]) -> 
+print_endline ("[flx_ogen] One component union should have been removed");
 print_endline ("\n//One component union TYPE " ^ name ^" ctor name = "^id^
 " index=" ^ si n^ 
 ", argtype = "^
@@ -488,7 +497,7 @@ print_debug syms ("Handle type " ^ sbt bsym_table btyp ^ " instance " ^ si index
       *)
       | BBDCL_union (vs,args) ->
         let varmap = mk_varmap (Flx_bsym.sr bsym) vs ts in
-        let args = map (fun (_,_,t)->t) args in
+        let args = map (fun (_,_,evs,t,_,_)->t) args in
         let args = map (varmap_subst varmap) args in
         iter begin fun t ->
           match t with

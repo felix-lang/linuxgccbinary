@@ -63,6 +63,7 @@ let rec get_offsets' syms bsym_table typ : string list =
   let t' = unfold "flx_cal_type_offsets: get_offsets" typ in
   match t' with
   | BTYP_hole -> assert false
+  | BTYP_rev _ -> assert false
   | BTYP_int -> []
   | BTYP_pointer t -> ["0"]
 
@@ -86,9 +87,12 @@ let rec get_offsets' syms bsym_table typ : string list =
         ("get_offsets'] can't find index " ^ string_of_bid i)
     in
     begin match Flx_bsym.bbdcl bsym with
-    | BBDCL_union (vs, [id,n,t']) -> 
+    | BBDCL_union (vs, [id,n,[],t',_,false]) ->  assert false
+(*    
+      ;
       let t'' = tsubst (Flx_bsym.sr bsym) vs ts t' in
       get_offsets' syms bsym_table t''
+*)
     | BBDCL_union (vs,idts) ->
 (*
       let varmap = mk_varmap vs ts in
@@ -192,12 +196,16 @@ let rec get_offsets' syms bsym_table typ : string list =
   | BTYP_intersect _
     -> failwith "[ogen] Type intersection has no representation"
 
+  | BTYP_union _
+    -> failwith "[ogen] Type union has no representation"
+
   (* this is a lie .. it does, namely a plain C union *)
   | BTYP_type_set _
     -> failwith "[ogen] Type set has no representation"
 
   | BTYP_polyrecord _ 
   | BTYP_tuple_cons _ 
+  | BTYP_tuple_snoc _ 
   | BTYP_none 
 
 
@@ -208,6 +216,7 @@ let rec get_offsets' syms bsym_table typ : string list =
   | BTYP_type  _
   | BTYP_type_var _
   | BTYP_type_apply _
+  | BTYP_type_map _
   | BTYP_type_function _
   | BTYP_type_tuple _
   | BTYP_type_match _

@@ -60,6 +60,7 @@ open class Fibres
       svc$ svc_schedule_detached fthr;
   }
 
+  proc swait() { svc$ svc_swait; }
 
   proc chain : cont = "return $1;";
 
@@ -68,9 +69,13 @@ open class Fibres
 
   //$ Construct a fibre scheduler.
   //$  NOTE: NOT GARBAGE COLLECTED!
-  ctor fibre_scheduler: 1 = """new ::flx::run::sync_sched(false, PTF gcp, 
-    new ::std::list<::flx::rtl::fthread_t*>)""";
+  ctor fibre_scheduler: bool = """new ::flx::run::sync_sched($1, PTF gcp, 
+    new ::std::list<::flx::rtl::fthread_t*>)"""
   ;
+  ctor fibre_scheduler () =>
+    fibre_scheduler (Env::getenv "FLX_DEBUG_DRIVER" != "")
+  ;
+     
 
   // NOTE: all this derooting shouldn't be required
   // because normally the deletion balances the construction
@@ -100,6 +105,14 @@ open class Fibres
   ;
 
   proc run: fibre_scheduler = "$1->frun();";
+
+  proc run (p: 1 -> 0) {
+    var s = fibre_scheduler();
+    spawn_fthread s p;
+    s.run;
+    delete_fibre_scheduler s;
+  }
+
  
   //$ The type of the stop state of the fibre scheduler.
   //$ terminated: the scheduler is terminated.
@@ -223,6 +236,9 @@ open class Schannel
   //$ so as to make them unreachable, so the gc can reap them.
   gen mk_null_oschannel[t]: 1->oschannel[t] = "NULL";
 
+  ctor[T] address: oschannel[T] = "$1";
+  ctor[T] address: ischannel[T] = "$1";
+
   //$ Check if an schannel is NULL.
   fun isNULL[T] :schannel[T] -> bool = "NULL==$1";
 
@@ -248,12 +264,26 @@ open class Schannel
     mk_ioschannel_pair[t]$ mk_schannel[t] ()
   ;
 
+  // pass in address of location to put the pointer to the T data
+  proc read[T] (chan:schannel[T], loc: &&T) {
+    svc$ svc_sread$ C_hack::cast[_schannel] chan, C_hack::reinterpret[&root::address] (loc);
+  }
+
+  // pass in address of location to put the T data
+  proc read[T] (chan:schannel[T], p: &T) {
+    var loc: &T;
+    read (chan, &loc);
+    p <- *loc;
+  }
+
   //$ Read an item from a bidirectional channel.
   inline gen read[T] (chan:schannel[T]) = {
     var loc: &T;
-    svc$ svc_sread$ C_hack::cast[_schannel] chan, C_hack::reinterpret[&root::address] (&loc);
-    return deref loc;
+    read (chan, &loc);
+    return *loc;
   }
+  proc read[T] (chan:ischannel[T], loc: &&T) { read (C_hack::cast[schannel[T]] chan, loc); }
+  proc read[T] (chan:ischannel[T], p: &T) { read (C_hack::cast[schannel[T]] chan, p); }
 
   //$ Read an item from an input channel.
   inline gen read[T] (chan:ischannel[T]) => read$ C_hack::cast[schannel[T]] chan;

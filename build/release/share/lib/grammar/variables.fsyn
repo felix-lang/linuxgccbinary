@@ -1,4 +1,4 @@
-#line 4925 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
+#line 4929 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
 //$ General variable binders.
 syntax variables {
   requires statements, executable;

@@ -56,7 +56,7 @@ print_endline ("Register type nr " ^ sbt bsym_table t);
     let t = minimise bsym_table syms.counter t in
     if not (registered_type syms bsym_table t)
     then begin
-      let () = check_recursion t in
+      let () = check_recursion bsym_table t in
       let n = fresh_bid syms.counter in
       if syms.compiler_options.Flx_options.print_flag then
       print_endline ("//Register type " ^ string_of_bid n ^ ": " ^
@@ -93,7 +93,7 @@ let register_tuple syms bsym_table t =
 print_endline ("flx_treg: Try to register tuple " ^ sbt bsym_table t);
     assert false
 
-let rec register_type_r ui syms bsym_table exclude sr t =
+let rec register_type_r' ui syms bsym_table exclude sr t =
   let t = normalise_tuple_cons bsym_table t in
 (*
 print_endline ("Register type r " ^ sbt bsym_table t);
@@ -108,7 +108,7 @@ print_endline ("Register type r " ^ sbt bsym_table t);
   if not (registered_type syms bsym_table t) then
   if not (mem t exclude) then
   if complete_type t then
-  let rr t' = register_type_r ui syms bsym_table (t :: exclude) sr t' in
+  let rr t' = register_type_r' ui syms bsym_table (t :: exclude) sr t' in
   let rnr t = register_type_nr syms bsym_table t in
   let t' = unfold "flx_treg" t in
   (*
@@ -116,6 +116,7 @@ print_endline ("Register type r " ^ sbt bsym_table t);
   *)
   match t' with
   | BTYP_hole -> assert false
+  | BTYP_rev _ -> assert false (* should have been eliminated *)
   | BTYP_int -> ()
   | BTYP_label -> ()
   | BTYP_void -> ()
@@ -177,6 +178,7 @@ print_endline ("Array type " ^ sbt bsym_table t ^ " base type " ^ sbt bsym_table
 
   | BTYP_tuple ps -> iter rr ps; rnr t
   | BTYP_tuple_cons (t1,t2) ->  assert false
+  | BTYP_tuple_snoc (t1,t2) ->  assert false
 
   | BTYP_record (ps) -> iter (fun (s,t)->rr t) ps; rnr t
   | BTYP_variant ps -> iter (fun (s,t)->rr t) ps; rnr t
@@ -220,7 +222,7 @@ print_endline ("Register type r: union -----------" ^ Flx_bsym.id bsym);
 print_endline ("vs len = " ^ si (List.length vs));
 print_endline ("ts len = " ^ si (List.length ts));
 *)
-      let cts = map (fun (_,_,t) -> t) cs in
+      let cts = map (fun (_,_,evs,d,c,gadt) -> d) cs in
       let cts = map (tsubst (Flx_bsym.sr bsym) vs ts) cts in
       iter rr cts;
       rnr t
@@ -273,11 +275,13 @@ print_endline ("External primitive instance, registering whole type " ^ sbt bsym
 
   | BTYP_none
   | BTYP_intersect _
+  | BTYP_union _
 
   | BTYP_type _
   | BTYP_type_tuple _
   | BTYP_type_function _
   | BTYP_type_apply _
+  | BTYP_type_map _
   | BTYP_type_match _
 
   | BTYP_type_set _
@@ -289,4 +293,14 @@ print_endline ("External primitive instance, registering whole type " ^ sbt bsym
       "Unexpected kind in register type: " ^
       sbt bsym_table t
     )
+
+let register_type_r ui syms bsym_table exclude sr t =
+  try 
+    register_type_r' ui syms bsym_table exclude sr t
+  with 
+  | Bad_recursion ->
+    clierr sr ("[register_type_r] illegal fixpoint in type " ^ 
+     sbt bsym_table t)
+
+
 

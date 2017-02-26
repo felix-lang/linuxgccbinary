@@ -6,6 +6,14 @@
   'felix-mode                     ;; name of the mode
   '("//")                         ;; comments delimiter
   '(
+    "chip" "pin" "read" "write"
+    "circuit" "endcircuit" "connector" "connect" "device"
+    "axiom" "lemma" "in"
+    "object" "implements" "interface"
+    "export"
+    "perform"
+    "method"
+    "array" "darray" "varray" "opt" "int" "uint" "string"
      "union"
      "pod"
      "ctor"
@@ -50,6 +58,7 @@
      "syntax"
      "struct"
    )                              ;; some keywords
+
   '(("=" . 'font-lock-operator-face) 
     (":" . 'font-lock-operator-face)
     ("$" . 'font-lock-operator-face)
@@ -59,7 +68,7 @@
     (">" . 'font-lock-operator-face)
     ("[0-9]+" . 'font-lock-variable-name-face)
     (";" . 'font-lock-builtin-face))   ;; a built-in 
-  '("\\.$")                       ;; files that trigger this mode
+  '("\\.flx$")                       ;; files that trigger this mode
    nil                            ;; any other functions to call
   "Felix highlighting mode"       ;; doc string
 )
@@ -350,12 +359,12 @@
                         (window-buffer
                         (minibuffer-selected-window)))))
 
-    (comint-check-source file-name) ; Check to see if buffer needs
+    ;;(comint-check-source file-name) ; Check to see if buffer needs
                                     ; saved first
 
     (message                        ; send output to a new buffer
      (shell-command-to-string       ; capture output
-      (concat "flx " file-name " 2>/dev/null"))))) ; build command
+      (concat "flx " file-name))))) ; build command
 
 ; bind keyboard shortcuts 
 (add-hook 'felix-mode-hook
@@ -363,8 +372,37 @@
           (lambda () (progn
                   (modify-syntax-entry ?\[ "-")
                   (modify-syntax-entry ?\] "-")
+	    (modify-syntax-entry ?\` "-")
                   (local-set-key (kbd "C-c C-l") #'felix-load-file))))
 
 
 
+;; Flymake for Felix
+(require 'flymake)
+
+;; I don't like the default colors :)
+;;(set-face-background 'flymake-errline "yellow")
+;;(set-face-background 'flymake-warnline "dark slate blue")
+
+
+;; Invoke felix with '-c --nocc' to get syntax checking
+(defun flymake-felix-init ()
+  (let* ((temp-file   (flymake-init-create-temp-buffer-copy
+                       'flymake-create-temp-inplace))
+	 (local-file  (file-relative-name
+                       temp-file
+                       (file-name-directory buffer-file-name))))
+    (list "flx" (list "-c" "--nocc" local-file))))
+
+(push '(".+\\.flx$"  flymake-felix-init) flymake-allowed-file-name-masks)
+(push '(".+\\.fdoc$" flymake-felix-init) flymake-allowed-file-name-masks)
+
+(add-to-list 'flymake-err-line-patterns '("\\(.*\\.flx\\): line \\([0-9]+\\).*$" 1 2 nil))
+(add-to-list 'flymake-err-line-patterns '("See also \\(.*\\.flx\\): line \\([0-9]+\\).*$" 1 2 nil))
+(add-to-list 'flymake-err-line-patterns '("See: \\(.*\\.flx\\): line \\([0-9]+\\).*$" 1 2 nil))
+(add-to-list 'flymake-err-line-patterns '("In \\(.*\\.flx\\): line \\([0-9]+\\).*$" 1 2 nil))
+(add-to-list 'flymake-err-line-patterns '("Fatal error.*$" nil))
+
+
+(add-hook 'felix-mode-hook 'flymake-mode)
 

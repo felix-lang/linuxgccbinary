@@ -120,7 +120,7 @@ let rec rst state name access (parent_vs:vs_list_t) (st:statement_t) : asm_t lis
   | STMT_seq _ -> assert false
   | STMT_private (sr,st) -> rst state name `Private parent_vs st
   | STMT_include (sr,inspec) ->
-      state.Flx_desugar_expr.include_file_cache <- inspec :: state.Flx_desugar_expr.include_file_cache;
+      state.Flx_desugar_expr.include_file_cache <- (sr, inspec) :: state.Flx_desugar_expr.include_file_cache;
       []
   | STMT_label (sr,s) -> [Exe (sr,EXE_label s)]
   | STMT_proc_return sr -> [Exe (sr,EXE_proc_return)]
@@ -365,8 +365,8 @@ print_endline ("Translating Lazy Declaration " ^ name);
     
 
   (* functions *)
-  | STMT_reduce (sr,name,vs,params, rsrc,rdst) ->
-    [ Dcl (sr,name,None,access,vs,DCL_reduce (params,rsrc,rdst)) ]
+  | STMT_reduce (sr,name,reds) ->
+    [ Dcl (sr,name,None,access,dfltvs,DCL_reduce (reds)) ]
 
   | STMT_axiom (sr,name,vs,params, rsrc) ->
     [ Dcl (sr,name,None,access,vs,DCL_axiom (params,rsrc)) ]
@@ -644,7 +644,7 @@ print_endline ("Translating Lazy Declaration " ^ name);
     d @ [Exe (sr,EXE_noreturn_code (s,x))]
 
   | STMT_stmt_match (sr,(e,pss)) -> 
-    Flx_match.gen_stmt_match seq rex rsts name parent_vs access sr e pss
+    Flx_match.gen_stmt_match seq rex (rsts name parent_vs access) name sr e pss
 
   (* split into multiple declarations *)
 

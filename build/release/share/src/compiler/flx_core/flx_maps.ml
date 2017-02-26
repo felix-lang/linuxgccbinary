@@ -41,6 +41,7 @@ let map_type f (t:typecode_t):typecode_t = match t with
   *)
   | TYP_sum ts -> TYP_sum (List.map f ts)
   | TYP_intersect ts -> TYP_intersect (List.map f ts)
+  | TYP_union ts -> TYP_union (List.map f ts)
   | TYP_function (a,b) -> TYP_function (f a, f b)
   | TYP_effector (a,e,b) -> TYP_effector (f a, f e, f b)
   | TYP_cfunction (a,b) -> TYP_cfunction (f a, f b)
@@ -66,6 +67,8 @@ let map_type f (t:typecode_t):typecode_t = match t with
     TYP_type_match (f t, ps)
 
   | TYP_tuple_cons (sr,t1,t2) -> TYP_tuple_cons (sr, f t1, f t2)
+  | TYP_tuple_snoc (sr,t1,t2) -> TYP_tuple_snoc (sr, f t1, f t2)
+
   (* meta constructors *)
   | TYP_apply (a,b) -> TYP_apply (f a, f b)
   | TYP_typefun (ps, a, b) -> TYP_typefun (ps, f a, f b)
@@ -114,7 +117,6 @@ let full_map_expr fi ft fe (e:expr_t):expr_t = match e with
   | EXPR_lookup (sr,(x,s,ts)) -> EXPR_lookup (sr,(fe x, s, List.map ft ts))
   | EXPR_apply (sr,(a,b)) -> EXPR_apply (sr,(fe a, fe b))
   | EXPR_tuple (sr,es) -> EXPR_tuple (sr, List.map fe es)
-  | EXPR_tuple_cons (sr,eh, et) -> EXPR_tuple_cons (sr, fe eh, fe et)
   | EXPR_record (sr,es) -> EXPR_record (sr, List.map (fun (s,e) -> s,fe e) es)
   | EXPR_polyrecord (sr,es,e) -> EXPR_polyrecord (sr, List.map (fun (s,e) -> s,fe e) es, fe e)
   | EXPR_replace_fields (sr,e,ss) -> 
@@ -143,6 +145,7 @@ let full_map_expr fi ft fe (e:expr_t):expr_t = match e with
   | EXPR_product (sr,es) -> EXPR_product (sr, List.map fe es)
   | EXPR_sum (sr,es) -> EXPR_sum (sr, List.map fe es)
   | EXPR_intersect (sr,es) -> EXPR_intersect (sr, List.map fe es)
+  | EXPR_union (sr,es) -> EXPR_union(sr, List.map fe es)
   | EXPR_isin (sr,(a,b)) -> EXPR_isin (sr, (fe a, fe b))
   | EXPR_orlist (sr,es) -> EXPR_orlist (sr, List.map fe es)
   | EXPR_andlist (sr,es) -> EXPR_andlist (sr, List.map fe es)
@@ -194,8 +197,15 @@ let full_map_expr fi ft fe (e:expr_t):expr_t = match e with
   | EXPR_range_check (sr,mi,v,mx) -> EXPR_range_check (sr, fe mi, fe v, fe mx)
   | EXPR_not (sr,e) -> EXPR_not (sr, fe e)
   | EXPR_extension (sr,es,e) -> EXPR_extension (sr, List.map fe es, fe e)
+
+  | EXPR_tuple_cons (sr,eh, et) -> EXPR_tuple_cons (sr, fe eh, fe et)
   | EXPR_get_tuple_tail (sr,e) -> EXPR_get_tuple_tail (sr, fe e)
   | EXPR_get_tuple_head (sr,e) -> EXPR_get_tuple_head (sr, fe e)
+
+  | EXPR_tuple_snoc (sr,eh, et) -> EXPR_tuple_snoc (sr, fe eh, fe et)
+  | EXPR_get_tuple_body (sr,e) -> EXPR_get_tuple_body (sr, fe e)
+  | EXPR_get_tuple_last (sr,e) -> EXPR_get_tuple_last (sr, fe e)
+
 
 let idf x = x 
 let map_expr fe (e:expr_t):expr_t = full_map_expr idf idf fe e
@@ -251,6 +261,8 @@ let iter_expr f (e:expr_t) =
   | EXPR_not (_,x) 
   | EXPR_get_tuple_tail (_,x)
   | EXPR_get_tuple_head (_,x)
+  | EXPR_get_tuple_body (_,x)
+  | EXPR_get_tuple_last (_,x)
   | EXPR_remove_fields (_,x,_)
     -> f x
 
@@ -262,6 +274,7 @@ let iter_expr f (e:expr_t) =
   | EXPR_apply (_,(a,b))
   | EXPR_isin (_,(a,b))
   | EXPR_tuple_cons (_, a, b) 
+  | EXPR_tuple_snoc (_, a, b) 
     -> f a; f b
 
   | EXPR_effector (_,(a,e,b))
@@ -271,6 +284,7 @@ let iter_expr f (e:expr_t) =
   | EXPR_product (_,es)
   | EXPR_sum (_,es)
   | EXPR_intersect (_,es)
+  | EXPR_union (_,es)
   | EXPR_orlist (_,es)
   | EXPR_andlist (_,es)
   | EXPR_arrayof (_, es)
@@ -299,6 +313,9 @@ let scan_expr e =
   Flx_list.uniq_list !ls
 
 let rec map_exe fi ft fe (x:exe_t):exe_t = match x with
+  | EXE_begin_match_case
+  | EXE_end_match_case -> x
+
   | EXE_circuit cs -> x 
   | EXE_type_error (x) -> EXE_type_error (map_exe fi ft fe x)
   | EXE_code (c,e) -> EXE_code (c, fe e)
@@ -329,6 +346,43 @@ let rec map_exe fi ft fe (x:exe_t):exe_t = match x with
   | EXE_endtry -> x
   | EXE_catch (name,t) -> EXE_catch (name, ft t)
   | EXE_proc_return_from _ -> x
+
+
+let rec iter_exe fi ft fe (x:exe_t):unit = match x with
+  | EXE_begin_match_case
+  | EXE_end_match_case -> ()
+
+  | EXE_circuit cs ->  () 
+  | EXE_type_error (x) -> iter_exe fi ft fe x
+  | EXE_code (c,e) ->fe e
+  | EXE_noreturn_code (c,e) -> fe e
+  | EXE_comment _
+  | EXE_label _
+  | EXE_goto _
+    ->() 
+  | EXE_cgoto e -> fe e
+  | EXE_ifcgoto (e1,e2) -> fe e1; fe e2
+  | EXE_ifgoto (e,s) -> fe e
+  | EXE_call (a,b) -> fe a; fe b
+  | EXE_call_with_trap (a,b) ->fe a; fe b
+  | EXE_jump (a,b) ->fe a; fe b
+  | EXE_loop (s,e) -> fe e
+  | EXE_svc _ -> ()
+  | EXE_fun_return e -> fe e
+  | EXE_yield e -> fe e
+  | EXE_proc_return ->() 
+  | EXE_halt _ -> ()
+  | EXE_trace _ -> ()
+  | EXE_nop _ -> ()
+  | EXE_init (name,e) -> fe e
+  | EXE_iinit ((name,idx),e) -> fi idx; fe e
+  | EXE_assign (a,b) -> fe a; fe b
+  | EXE_assert e -> fe e
+  | EXE_try  -> ()
+  | EXE_endtry -> ()
+  | EXE_catch (name,t) -> ft t
+  | EXE_proc_return_from _ -> ()
+
 
 
 

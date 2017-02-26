@@ -190,6 +190,7 @@ let rec gen_expr'
       (*
       print_endline ("Arg to C function is tuple " ^ sbe bsym_table a);
       *)
+      assert (List.length xs = List.length ps);
       fold_left2
       (fun s ((x,t) as xt) {pindex=ix} ->
         let x =
@@ -246,8 +247,11 @@ let rec gen_expr'
   | BEXPR_int i -> ce_atom (si i)
   | BEXPR_polyrecord _ -> print_endline "Attempt to generate polyrecord value, should have been factored out"; assert false
   | BEXPR_remove_fields _ -> print_endline "Attempt to generate remove fields, should have been factored out"; assert false
-  | BEXPR_unit -> print_endline "Generating unit expr"; ce_atom "0/*[gen_expr']CLT:UNIT*/" (* ce_atom "(::flx::rtl::unit())/*UNIT TUPLE?*/" *)
-  | BEXPR_unitptr -> print_endline "Generating unitptr expr"; ce_atom "NULL/*UNITPTR*/"
+  | BEXPR_unitptr k -> 
+    begin match k with
+    | 0 -> print_endline "Generating unit expr"; ce_atom "0/*[gen_expr']CLT:UNIT*/"
+    | _ -> print_endline "Generating unitptr expr"; ce_atom ("NULL/*UNITPTR<"^string_of_int k^">*/")
+    end
   | BEXPR_funprod _ -> assert false
   | BEXPR_funsum _ -> assert false
   | BEXPR_lrangle _ -> assert false
@@ -897,11 +901,40 @@ print_endline "Apply struct";
     in
     let es = xh' :: es in
     let t = normalise_tuple_cons bsym_table t in
-    let e = BEXPR_tuple es, t in
+    let e = bexpr_tuple t es in
 (*
 print_endline ("Normalised expression " ^ sbe bsym_table e);
 print_endline ("Normalised type " ^ sbt bsym_table t);
 *)
+    ge' e
+
+  | BEXPR_tuple_snoc ((et', tt' as xt'),(eh',th' as xh') ) ->
+    let ntt = normalise_tuple_cons bsym_table tt' in
+    let tts = match ntt with
+    | BTYP_tuple tts -> tts
+    | BTYP_array (t,BTYP_unitsum n) -> 
+      let tts = ref [] in
+      for i = 0 to n - 1 do
+        tts := t :: !tts;
+      done;
+      !tts
+    | _ -> assert false
+    in 
+    let n = List.length tts in
+    let es = match et' with
+    | BEXPR_tuple es -> es 
+    | _ -> 
+      let counter = ref 0 in
+      List.map 
+        (fun t-> 
+          let i = !counter in incr counter;
+          bexpr_get_n t i xt'
+        )
+        tts
+    in
+    let es = es @[xh'] in
+    let t = normalise_tuple_cons bsym_table t in
+    let e = bexpr_tuple t es in
     ge' e
 
   | BEXPR_tuple_head (e',t' as x') ->
@@ -927,6 +960,25 @@ print_endline ("Normalised type " ^ sbt bsym_table t);
  
     | _ -> 
       print_endline ("Expected head to apply to a tuple, got " ^ 
+        sbt bsym_table t' ^ " ->(normalised)-> " ^ sbt bsym_table t'');
+      assert false
+    end
+
+  | BEXPR_tuple_last (e',t' as x') ->
+    let t'' = normalise_tuple_cons bsym_table t' in
+    begin match t'' with 
+    | BTYP_tuple [] -> assert false
+    | BTYP_tuple ts -> 
+      let eltt = List.hd (List.rev ts) in
+      let n = List.length ts in
+      ge' (bexpr_get_n eltt (n-1) x')
+
+    | BTYP_array (eltt,BTYP_unitsum n) ->
+      assert (n > 0);
+      ge' (bexpr_get_n eltt (n-1) x')
+ 
+    | _ -> 
+      print_endline ("Expected tuple_last to apply to a tuple, got " ^ 
         sbt bsym_table t' ^ " ->(normalised)-> " ^ sbt bsym_table t'');
       assert false
     end
@@ -966,6 +1018,36 @@ print_endline ("Normalised type " ^ sbt bsym_table t);
     in
     let tail = match es with [x] -> x | es -> bexpr_tuple t es in
     ge' tail
+
+  | BEXPR_tuple_body (e',t' as x') ->
+    let t'' = normalise_tuple_cons bsym_table t' in
+    let ts = match t'' with 
+    | BTYP_tuple ts ->  ts
+    | BTYP_array (t, BTYP_unitsum n) -> 
+      let tts = ref [] in
+      for i = 0 to n - 1 do
+        tts := t :: !tts;
+      done;
+      !tts
+
+    | _ -> 
+      print_endline ("Expected tuple_body to be tuple, got " ^ 
+        sbt bsym_table t' ^ " ->(normalised)-> " ^ sbt bsym_table t'');
+      assert false
+    in
+    let n = List.length ts in
+    let counter = ref 0 in
+    let es = 
+      List.map (fun t-> 
+        let x = bexpr_get_n t (!counter) x' in
+        incr counter;
+        x
+     ) 
+     (List.rev (List.tl (List.rev ts))) 
+    in
+    let body = match es with [x] -> x | es -> bexpr_tuple t es in
+    ge' body
+
 
   | BEXPR_match_case (n,((e',t') as e)) ->
     let t' = beta_reduce "flx_egen get_n: match_case" syms.Flx_mtypes2.counter bsym_table sr t' in
@@ -1259,6 +1341,8 @@ end
         )
     end
 
+  | BEXPR_identity_function t -> assert false
+ 
   | BEXPR_closure (index,ts') ->
 (*
     print_endline ("Generating closure of " ^ si index);

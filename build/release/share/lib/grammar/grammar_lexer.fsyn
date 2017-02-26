@@ -1,4 +1,4 @@
-#line 2252 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
+#line 2256 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
 SCHEME """
 (define (stripus s) ; strip underscores
   (let*

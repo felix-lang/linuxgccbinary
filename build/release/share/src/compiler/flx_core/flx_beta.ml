@@ -307,8 +307,11 @@ print_endline "Type list index returned None";
   *)
 
   | BTYP_tuple_cons (t1,t2) -> btyp_tuple_cons (br t1) (br t2)
+  | BTYP_tuple_snoc (t1,t2) -> btyp_tuple_snoc (br t1) (br t2)
   | BTYP_inst (i,ts) -> btyp_inst (i, List.map br ts)
   | BTYP_tuple ls -> btyp_tuple (List.map br ls)
+  | BTYP_rev t -> btyp_rev (br t)
+
   | BTYP_array (i,t) -> btyp_array (br i, br t)
   | BTYP_sum ls -> btyp_sum (List.map br ls)
   | BTYP_record (ts) ->
@@ -331,6 +334,9 @@ print_endline "Type list index returned None";
      otherwise return the intersection of non units
      (at least two)
   *)
+
+(*
+  (* FIXME: this is WRONG WRONG WRONG. *)
   | BTYP_intersect ls ->
     let ls = List.map br ls in
     let void_t = btyp_void () in
@@ -341,6 +347,15 @@ print_endline "Type list index returned None";
     | [t] -> t
     | ls -> btyp_intersect ls
     end
+*)
+
+  | BTYP_intersect ls -> 
+    let ls = List.map br ls in
+    btyp_intersect ls
+
+  | BTYP_union ls -> 
+    let ls = List.map br ls in
+    btyp_union ls
 
   | BTYP_type_set ls -> btyp_type_set (List.map br ls)
 
@@ -411,6 +426,26 @@ print_endline "Type list index returned None";
   | BTYP_void -> t
   | BTYP_type _ -> t
   | BTYP_unitsum _ -> t
+
+  (* beta reduce map of function on explicit tuple as tuple of
+     beta-reduced applications of function to tuple components
+  *)
+  | BTYP_type_map (t1,BTYP_tuple ls) ->
+    let rs = 
+      List.map (fun argt ->
+        br (btyp_type_apply (t1,argt))
+      )
+      ls 
+    in 
+    btyp_tuple rs
+
+  (* a bit hacky !!! Doesn't apply function to index type*)
+  | BTYP_type_map (t1,BTYP_array (b,n)) ->
+    let rb = br (btyp_type_apply (t1,b)) in
+    btyp_array (rb,n)
+
+  (* can't reduce *)
+  | BTYP_type_map (t1,t2) -> btyp_type_map (br t1, br t2)
 
   | BTYP_type_apply (t1,t2) ->
 (* NOT clear if this is OK or not *)

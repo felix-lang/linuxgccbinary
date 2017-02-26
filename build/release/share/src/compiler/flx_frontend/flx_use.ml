@@ -35,6 +35,10 @@ changing the data structures.
 
 exception NotFoundDefn of int
 
+let rec istriv t = match Flx_btype.trivorder t with
+  | Some _ -> true
+  | None -> false
+
 let rec uses_btype add bsym_table count_inits t =
   let f_btype t = uses_btype add bsym_table count_inits t in
  
@@ -52,6 +56,8 @@ and uses_bexe' add bsym_table count_inits exe =
 
   let rec chkl e = 
     match e with
+    | _,t when istriv t -> ()
+
     | BEXPR_deref ((BEXPR_ref _),_ as p),_ -> 
       print_endline "Deref a ref in lcontext: variable not considered used";
       print_endline ("In assignment " ^ string_of_bexe bsym_table 0 exe);
@@ -116,7 +122,7 @@ and uses_bexe' add bsym_table count_inits exe =
       print_endline ("[Flx_use] Unexpected " ^ sbe bsym_table e);
       print_endline ("[Flx_use] In assignment " ^ string_of_bexe bsym_table 0 exe);
       print_endline ("[flx_use] In\n" ^ Flx_srcref.long_string_of_src sr);
-      assert false
+
   in
   match exe,count_inits with
   | BEXE_init (_,i,e),false -> f_bexpr e
@@ -266,6 +272,18 @@ assert (List.length entries = 0); (* THIS IS OLD CODE ... ? *)
     end entries
   end syms.instances_of_typeclass;
   
+(*
+
+THIS CRAP IS HERE FOR THIS REASON: A symbol X may be unused,
+but a reduction Y -> X performed later then makes X used.
+So if we're going to apply reductions, the symbols on the RHS
+of the reduction have to be retained if the symbols on the LHS
+are, in case the LHS matches.
+
+I'm going to skip this for the moment!
+
+
+
   (* process reductions. assume temporarily that useless ones
     have been removed. Check later this is right. This is a 
     nasty routine here, adds stuff that cannot match because it
@@ -281,10 +299,11 @@ assert (List.length entries = 0); (* THIS IS OLD CODE ... ? *)
   let maybe_add ignores j = 
     if not (List.mem j ignores) then add j
   in
+(*
   if List.length (!(syms.reductions)) <> 0 then
      failwith ("Reductions exist!!")
   ;
-
+*)
   List.iter
   (fun (id,bvs,bps,lhs, rhs) ->
     let ignorelist = List.map (fun p -> p.Flx_bparameter.pindex) bps in
@@ -292,6 +311,7 @@ assert (List.length entries = 0); (* THIS IS OLD CODE ... ? *)
   )
   !(syms.reductions)
   ;
+*)
 
   while not (BidSet.is_empty !untraced) do
     let bid = BidSet.choose !untraced in
@@ -312,21 +332,28 @@ let full_use_closure syms bsym_table =
 
 exception Bad
 
+let keep bsym_table bidset exe =
+  match exe with
+  | BEXE_assign (sr,((_,t) as lhs),rhs) ->
+    if istriv t then false
+    else
+    let add i = if BidSet.mem i bidset then () else raise Bad in
+    begin try uses_bexe add bsym_table true exe; true
+    with Bad -> false
+    end
+
+  | exe ->
+    let add i = if BidSet.mem i bidset then () else raise Bad in
+    begin try uses_bexe add bsym_table true exe; true
+    with Bad -> false
+    end
+
 let strip_inits bsym_table bidset exes =
   let rec aux exes_in exes_out =
     match exes_in with
     | [] -> List.rev exes_out
     | exe::tail ->
-      (* any exe containing an "unused" symbol gets thrown out *)
-      let add i = if BidSet.mem i bidset then () else raise Bad in
-      let keep = 
-        try uses_bexe add bsym_table true exe; true
-        with Bad -> false
-      in
-(*
-if not keep then print_endline ("Throwing out instruction " ^ string_of_bexe bsym_table 0 exe);
-*)
-      aux tail (if keep then (exe::exes_out) else exes_out)
+      aux tail (if keep bsym_table bidset exe then (exe::exes_out) else exes_out)
   in
   aux exes [] 
 

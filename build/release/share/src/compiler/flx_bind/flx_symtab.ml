@@ -6,6 +6,9 @@ open Flx_ast
 open Flx_types
 open Flx_btype
 
+(* do NOT put stuff in this! *)
+let dummy_hashtab = Hashtbl.create 0
+
 let noeffects = Flx_typing.flx_unit
 
 let str_parent x = match x with | Some p -> string_of_int p | None -> "None"
@@ -586,11 +589,18 @@ print_endline ("Flx_symtab:raw add_symbol: " ^ id^"="^string_of_int index ^ ", p
   (* Add the declarations to the symbol table. *)
   begin match (dcl:Flx_types.dcl_t) with
 
-  | DCL_reduce (ps, e1, e2) ->
-      let ips = add_simple_parameters pubtab privtab (Some symbol_index) ps in
-
+  | DCL_reduce reds ->
+      let reds = 
+        List.map (fun (vs, ps, e1, e2) ->
+          let ips: parameter_t list = add_simple_parameters pubtab privtab (Some symbol_index) ps in
+          let ivs : ivs_list_t = make_ivs vs in
+          add_tvars' (Some symbol_index) privtab ivs;
+          (ivs,ips, e1, e2)
+        )
+        reds
+      in
       (* Add the symbol to the symbol table. *)
-      add_symbol ~pubtab ~privtab symbol_index id (SYMDEF_reduce (ips, e1, e2));
+      add_symbol ~pubtab ~privtab symbol_index id (SYMDEF_reduce reds);
 
       (* Add the type variables to the private symbol table. *)
       add_tvars privtab
@@ -1296,73 +1306,123 @@ print_endline ("TYPECLASS "^name^" Init procs = " ^ string_of_int (List.length i
   | DCL_union (its) ->
       let tvars = List.map (fun (s,_,_)-> TYP_name (sr,s,[])) (fst ivs) in
       let utype = TYP_name (sr, id, tvars) in
-      let its =
+      let its' =
         let ccount = ref 0 in (* count component constructors *)
-        List.map begin fun (component_name,v,vs,t) ->
+        List.map begin fun (component_name,v,vs,d,c) ->
           (* ctor sequence in union *)
           let ctor_idx = match v with
           | None ->  !ccount
           | Some i -> ccount := i; i
           in
           incr ccount;
-          component_name, ctor_idx, vs, t
+          let c,gadt = 
+            match c with 
+            | None -> utype,false 
+            | Some c -> c,true 
+          in
+          (* existential type variables *)
+          let evs = make_ivs vs in
+          component_name, ctor_idx, evs, d,c, gadt
         end its
       in
 
       (* Add union to sym_table. *)
-      add_symbol ~pubtab ~privtab symbol_index id (SYMDEF_union its);
+      add_symbol ~pubtab ~privtab symbol_index id (SYMDEF_union its');
 
-      (* Possibly add union to the public symbol table. *)
+      (* Add type variables to symbol table and the private name lookup table of union. *)
+      add_tvars privtab;
+
+      (* add union name to name lookup tables *)
       if access = `Public then add_unique pub_name_map id symbol_index;
-
-      (* Add the union to the private symbol table. *)
       add_unique priv_name_map id symbol_index;
 
       let unit_sum =
-        List.fold_left begin fun v (_,_,_,t) ->
-          v && (match t with TYP_void _ -> true | _ -> false)
-        end true its
+        List.fold_left begin fun v (_,_,_,d,c,_) ->
+          v && (match d with TYP_void _ -> true | _ -> false)
+        end true its'
       in
-      List.iter begin fun (component_name, ctor_idx, vs, t) ->
+
+      List.iter begin fun (component_name, ctor_idx, evs, d,c,gadt) ->
         let dfn_idx = Flx_mtypes2.fresh_bid counter_ref in (* constructor *)
         let match_idx = Flx_mtypes2.fresh_bid counter_ref in (* matcher *)
 
-        (* existential type variables *)
-        let evs = make_ivs vs in
-        add_tvars' (Some dfn_idx) privtab evs;
+        (* name lookup tables owned by constructor, for type variables *)
+        let ctorprivtab = Hashtbl.create 3 in
+        let ctorpubtab = dummy_hashtab in (* no publically accessible symbols owned *)
+ 
+        (* add extra type variables to symbol table *)
+        List.iter (fun (tvid,index,mt) -> 
+           add_symbol ~pubtab:dummy_hashtab ~privtab:dummy_hashtab 
+             ~parent:(Some dfn_idx) ~ivs:dfltvs index tvid (SYMDEF_typevar mt)) 
+           (fst evs)
+        ;
+
+        (* calculate type variables for constructor. For a non-gadt
+           this will inherited variables plus the unions variables
+           the evs should be empty but we'll ad them anyhow.
+           For a gadt, it is the inherited variables plus the evs,
+           we don't put the union type variables in there,
+           if needed the user has to add them to evs
+        *)
+        let allivs,localivs = match gadt with
+        | false -> 
+          let allivs = merge_ivs ivs inherit_ivs in
+          let allivs = merge_ivs allivs evs in
+          let localivs = merge_ivs ivs evs in
+          allivs,localivs
+        | true ->
+          let allivs = merge_ivs inherit_ivs evs in
+          allivs,evs
+        in
+        
+        (* add all the type variables (ALL OF THEM) to the contructors
+          private name lookup table. Some will be in the environment anyhow
+          but this is safest
+        *)
+        List.iter (fun (tvid, index, _ ) ->
+           if not (Hashtbl.mem ctorprivtab tvid) then
+           full_add_typevar counter_ref sym_table sr ctorprivtab tvid index
+        )
+        (fst allivs);
+
+        (* add the extra type variables to the unions name lookup table too,
+           so the list of constructors in it can also be bound
+
+           we have to make sure we don't add the same one twice though
+        *)
+        List.iter (fun (tvid, index, _ ) ->
+           if not (Hashtbl.mem privtab tvid) then
+           full_add_typevar counter_ref sym_table sr privtab tvid index
+        )
+        (fst evs);
+
+
+        (* now add the actual constructors to the symbol table and the scope containing the union *)
         let ctor_dcl2 =
           if unit_sum then begin
-            if access = `Public then add_unique pub_name_map component_name dfn_idx;
-            add_unique priv_name_map component_name dfn_idx;
-            SYMDEF_const_ctor (symbol_index, utype, ctor_idx, evs)
+            if access = `Public then full_add_unique counter_ref sym_table sr allivs pub_name_map component_name dfn_idx;
+            full_add_unique counter_ref sym_table sr allivs priv_name_map component_name dfn_idx;
+            SYMDEF_const_ctor (symbol_index, c, ctor_idx, evs)
           end else
-            match t with
+            match d with
             | TYP_void _ -> (* constant constructor *)
-                if access = `Public then add_unique pub_name_map component_name dfn_idx;
-                add_unique priv_name_map component_name dfn_idx;
-                SYMDEF_const_ctor (symbol_index, utype, ctor_idx, evs)
-
-            | TYP_tuple ts -> (* non-constant constructor or 2 or more arguments *)
-                if access = `Public then add_function pub_name_map component_name dfn_idx;
-                add_function priv_name_map component_name dfn_idx;
-                SYMDEF_nonconst_ctor (symbol_index, utype, ctor_idx, evs, t)
-
-            | _ -> (* non-constant constructor of 1 argument *)
-                if access = `Public then add_function pub_name_map component_name dfn_idx;
-                add_function priv_name_map component_name dfn_idx;
-                SYMDEF_nonconst_ctor (symbol_index, utype, ctor_idx, evs, t)
+                if access = `Public then full_add_unique counter_ref sym_table sr allivs pub_name_map component_name dfn_idx;
+                full_add_unique counter_ref sym_table sr allivs priv_name_map component_name dfn_idx;
+                SYMDEF_const_ctor (symbol_index, c, ctor_idx, evs)
+            | _ -> 
+                if access = `Public then 
+                  full_add_function counter_ref sym_table sr allivs pub_name_map component_name dfn_idx;
+                full_add_function counter_ref sym_table sr allivs priv_name_map component_name dfn_idx;
+                SYMDEF_nonconst_ctor (symbol_index, c, ctor_idx, evs, d)
         in
 
         if print_flag then
           print_endline ("//  " ^ spc ^ Flx_print.string_of_bid dfn_idx ^
             " -> " ^ component_name);
 
-        (* Add the component to the sym_table. *)
-        add_symbol ~pubtab ~privtab dfn_idx component_name ctor_dcl2;
-      end its;
-
-      (* Add type variables to the private symbol table. *)
-      add_tvars privtab
+        (* Add the component to the sym_table.  *)
+        add_symbol ~pubtab:ctorpubtab ~privtab:ctorprivtab ~ivs:localivs dfn_idx component_name ctor_dcl2
+      end its'
 
   | DCL_cstruct (sts, reqs) ->
       let tvars = List.map (fun (s,_,_)-> `AST_name (sr,s,[])) (fst ivs) in

@@ -1,0 +1,4 @@
+Generated_from: 150 "/home/travis/build/felix-lang/felix/src/packages/botan.fdoc"
+Requires: botan
+includes: '"botan/rng.h"'
+cflags: -I/usr/local/include/botan-2.0

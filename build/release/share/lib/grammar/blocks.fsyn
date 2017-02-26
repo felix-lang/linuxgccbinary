@@ -1,4 +1,4 @@
-#line 237 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
+#line 241 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
 syntax blocks
 {
   stmt = block;

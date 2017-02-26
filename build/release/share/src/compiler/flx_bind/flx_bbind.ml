@@ -185,7 +185,6 @@ let rec bbind_symbol state bsym_table symbol_index sym_parent sym =
 (*
   print_endline (" ^^^^ BBIND_SYMBOL (subroutine) : Binding symbol "^sym.Flx_sym.id^" index=" ^ string_of_int symbol_index);
 *)
-
   (* If we've already processed this bid, exit early. We do this so we can avoid
    * any infinite loops in the symbols. *)
   if Hashtbl.mem state.visited symbol_index then () else begin
@@ -378,10 +377,10 @@ with _ -> print_endline ("PARENT BINDING FAILED CONTINUING ANYHOW");
     end
 *)
   in
-  (*
+(*
   print_endline ("******Binding " ^ qname ^ "="^ string_of_symdef
   sym.Flx_sym.symdef qname ivs);
-  *)
+*)
   begin match sym.Flx_sym.symdef with
   (* Pure declarations of functions, modules, and type don't generate anything.
    * Variable dcls do, however. *)
@@ -407,16 +406,23 @@ with _ -> print_endline ("PARENT BINDING FAILED CONTINUING ANYHOW");
     add_bsym true_parent (bbdcl_typeclass ([], bvs))
 
 
-  | SYMDEF_reduce (ps,e1,e2) ->
-    let bps = bind_basic_ps ps in
-    let be1 = be e1 in
-    let be2 = be e2 in
-    state.reductions := 
-      (sym.Flx_sym.id,bvs,bps,be1,be2) :: !(state.reductions);
+  | SYMDEF_reduce reds -> 
+    let reds =
+      List.map (fun (ivs,ps,e1,e2) ->
+        let bps = bind_basic_ps ps in
+        let be1 = be e1 in
+        let be2 = be e2 in
+        let bvs = map (fun (s,i,tp) -> s,i) (fst ivs) in
+        bvs,bps,be1,be2
+      )
+      reds
+    in
+    let r = sym.Flx_sym.id,reds in
+    state.reductions := r :: !(state.reductions);
 
     if state.print_flag then
       print_endline ("//bound reduction  " ^ sym.Flx_sym.id ^ "<" ^
-        string_of_bid symbol_index ^ ">" ^ print_bvs bvs);
+        string_of_bid symbol_index ^ ">" );
 
     add_bsym true_parent (bbdcl_reduce ())
 
@@ -567,7 +573,7 @@ print_endline ("flx_bind: Adding label " ^ s ^ " index " ^ string_of_int symbol_
     let argt = bt argt in
     let ut = bt ut in
     let btraint = bind_type_constraint vs' in
-    let evs = map (fun (s,i,__) -> s,i) (fst vs') in
+    let evs = map (fun (s,i,_) -> s,i) (fst vs') in
 
     if state.print_flag then
       print_endline ("//bound nonconst ctor " ^ sym.Flx_sym.id ^ "<" ^
@@ -576,7 +582,14 @@ print_endline ("flx_bind: Adding label " ^ s ^ " index " ^ string_of_int symbol_
     add_bsym None (bbdcl_nonconst_ctor (bvs,uidx,ut,ctor_idx,argt,evs,btraint))
 
   | SYMDEF_val t ->
-    let t = type_of_index symbol_index in
+    let t = 
+      try type_of_index symbol_index 
+      with GadtUnificationFailure ->
+(*
+        print_endline ("GADT UNIFICATION FAILURE BINDING TYPE OF VARIABLE " ^ sym.Flx_sym.id);
+*)
+        btyp_void ()
+    in
 
     if state.print_flag then
       print_endline ("//bound val " ^ sym.Flx_sym.id ^ "<" ^
@@ -780,7 +793,12 @@ print_endline ("Binding callback " ^ sym.Flx_sym.id ^ " index=" ^ string_of_bid 
   | SYMDEF_union (cs) ->
     if state.print_flag then
       print_endline ("//Binding union " ^ si symbol_index ^ " --> " ^ sym.Flx_sym.id);
-    let cs' = List.map (fun (n,v,vs',t) -> n, v,bt t) cs in
+    let ut = btyp_inst (symbol_index, List.map (fun (s,i) -> btyp_type_var (i,btyp_type 0)) bvs) in
+    let cs' = List.map (fun (n,v,vs',d,c,gadt) -> 
+      let evs = List.map (fun (s,i,_) -> s,i) (fst vs') in
+      n, v, evs, bt d, bt c, gadt
+    ) cs 
+    in
     add_bsym None (bbdcl_union (bvs, cs'))
 
   | SYMDEF_struct cs ->

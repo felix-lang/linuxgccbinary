@@ -1,4 +1,4 @@
-#line 249 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
+#line 253 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
 syntax brackets
 {
   //$ Array expression (deprecated).

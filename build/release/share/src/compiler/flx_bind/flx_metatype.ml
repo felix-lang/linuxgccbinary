@@ -50,6 +50,12 @@ print_endline ("Metatyping term " ^ st term);
   | BTYP_type_tuple ts ->
     btyp_tuple (List.map mt ts)
 
+  (* this is a hack, but should be ok for now: the type of a map
+     of a type function over a tuple is a tuple of the mapped types,
+     which is an ordinary type.
+  *)
+  | BTYP_type_map (_,_) -> btyp_type 0
+
   | BTYP_type_apply (a,b) ->
     begin
       let ta = mt a
@@ -140,12 +146,15 @@ print_endline ("Metatyping term " ^ st term);
   | BTYP_array _
   | BTYP_tuple _
   | BTYP_void
+  | BTYP_rev _
 
   | BTYP_int
   | BTYP_intersect _
+  | BTYP_union _
   | BTYP_polyrecord (_, _)
   | BTYP_type_match (_, _)
   | BTYP_tuple_cons (_, _)
+  | BTYP_tuple_snoc (_, _)
   | BTYP_unitsum _ -> btyp_type 0
   | BTYP_fix (i,mt) -> 
 (*

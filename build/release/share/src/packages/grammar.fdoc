@@ -134,11 +134,15 @@ syntax assertions {
   //$ before and after inlining, since that can destroy
   //$ or create candidate patterns.
 
-  private assertion_stmt  := "reduce" sdeclname sreduce_args ":" sexpr "=>" sexpr ";" =>#
+  private assertion_stmt  := "reduce" sname "|"? sreductions ";"  =>#
     """
-      `(ast_reduce ,_sr ,(first _2) ,(second _2) ,_3 ,_5 ,_7)
+      `(ast_reduce ,_sr ,_2 ,_4)
     """;
-      sreduce_args := "(" stypeparameter_comma_list ")" =># "_2";
+
+     private sreduce_args := "(" stypeparameter_comma_list ")" =># "_2";
+     private sreduction := stvarlist sreduce_args ":" sexpr "=>" sexpr =># "`(,_1 ,_2 ,_4 ,_6)";
+     private sreductions := sreduction =># "`(,_1)";
+     private sreductions := sreduction "|" sreductions =># "(cons _1 _3)";  
 }
 
 @
@@ -1472,6 +1476,7 @@ syntax expressions {
 
   //$ Fortran power.
   x[spower_pri] := x[ssuperscript_pri] "**" x[sprefixed_pri] =># "(infix 'pow)";
+  x[spower_pri] := x[ssuperscript_pri] "<**>" x[sprefixed_pri] =># "(infix 'tuple_snoc)";
 
   //$ Superscript, exponential.
   x[ssuperscript_pri] := x[ssuperscript_pri] "^" x[srefr_pri] =># "`(ast_superscript (,_1 ,_3))";
@@ -2368,6 +2373,7 @@ SCHEME """
   ;; name term constructor
   (define (nos x)`(ast_name ,_sr ,x ()))
   (define (noi x)`(ast_name ,_sr ,(symbol->string x) ()))
+  (define (qnoi c x)`(ast_lookup (,(noi c) ,(symbol->string x) ())))
 
   ;; polymorphic parameters
   (define (typesoftvarlist x) (map nos (map first (first x))))
@@ -3010,10 +3016,6 @@ SCHEME """
         ))
         `(,_8)
         `((ast_label ,_sr ,(string-append "continue_" _1)))
-        `((ast_unlikely_ifgoto ,_sr
-          (ast_apply ,_sr (,(noi '==) ((ast_name ,_sr ,_3 ()),_7)))
-          ,(string-append "break_" _1)
-        ))
         `((ast_call ,_sr ,(noi 'pre_incr) (ast_ref ,_sr (ast_name ,_sr ,_3()))))
         `((ast_goto ,_sr ,(string-append "redo_" _1)))
         `((ast_label ,_sr ,(string-append "break_" _1)))
@@ -3195,10 +3197,6 @@ syntax loops
         ))
         `(,_11)
         `((ast_label ,_sr ,(string-append "continue_" _1)))
-        `((ast_unlikely_ifgoto ,_sr
-          (ast_apply ,_sr (,(noi '==) ((ast_name ,_sr ,_4 ()),_10)))
-          ,(string-append "break_" _1)
-        ))
         `((ast_call ,_sr ,(noi 'pre_incr) (ast_ref ,_sr (ast_name ,_sr ,_4()))))
         `((ast_goto ,_sr ,(string-append "redo_" _1)))
         `((ast_label ,_sr ,(string-append "break_" _1)))
@@ -3218,15 +3216,11 @@ syntax loops
         `((ast_var_decl ,_sr ,_4 ,dfltvs none (some ,_6)))
         `((ast_label ,_sr ,(string-append "redo_" _1)))
         `((ast_unlikely_ifnotgoto ,_sr
-          (ast_apply ,_sr (,(noi '<=) ((ast_name ,_sr ,_4 ()),_8)))
+          (ast_apply ,_sr (,(noi '<=) ((ast_name ,_sr ,_4 ()) ,_8)))
           ,(string-append "break_" _1)
         ))
         `(,_9)
         `((ast_label ,_sr ,(string-append "continue_" _1)))
-        `((ast_unlikely_ifgoto ,_sr
-          (ast_apply ,_sr (,(noi '==) ((ast_name ,_sr ,_4 ()),_8)))
-          ,(string-append "break_" _1)
-        ))
         `((ast_call ,_sr ,(noi 'pre_incr) (ast_ref ,_sr (ast_name ,_sr ,_4()))))
         `((ast_goto ,_sr ,(string-append "redo_" _1)))
         `((ast_label ,_sr ,(string-append "break_" _1)))
@@ -3243,18 +3237,15 @@ syntax loops
     `(ast_seq ,_sr
       ,(append 
         `((ast_assign ,_sr _set ((Expr ,_sr (ast_name ,_sr ,_3 ())) none) ,_5))
+        `((ast_call ,_sr ,(noi 'pre_incr) (ast_ref ,_sr (ast_name ,_sr ,_3()))))
         `((ast_label ,_sr ,(string-append "redo_" _1)))
         `((ast_unlikely_ifnotgoto ,_sr
-          (ast_apply ,_sr (,(noi '>=) ((ast_name ,_sr ,_3 ()),_7)))
-          ,(string-append "break_" _1)
-        ))
-        `(,_8)
-        `((ast_label ,_sr ,(string-append "continue_" _1)))
-        `((ast_unlikely_ifgoto ,_sr
-          (ast_apply ,_sr (,(noi '==) ((ast_name ,_sr ,_3 ()),_7)))
+          (ast_apply ,_sr (,(noi '>) ((ast_name ,_sr ,_3 ()),_7)))
           ,(string-append "break_" _1)
         ))
         `((ast_call ,_sr ,(noi 'pre_decr) (ast_ref ,_sr (ast_name ,_sr ,_3()))))
+        `(,_8)
+        `((ast_label ,_sr ,(string-append "continue_" _1)))
         `((ast_goto ,_sr ,(string-append "redo_" _1)))
         `((ast_label ,_sr ,(string-append "break_" _1)))
        ))
@@ -3271,18 +3262,15 @@ syntax loops
     `(ast_seq ,_sr
       ,(append 
         `((ast_var_decl ,_sr ,_4 ,dfltvs (some ,_6) (some ,_8)))
+        `((ast_call ,_sr ,(noi 'pre_incr) (ast_ref ,_sr (ast_name ,_sr ,_4()))))
         `((ast_label ,_sr ,(string-append "redo_" _1)))
         `((ast_unlikely_ifnotgoto ,_sr
-          (ast_apply ,_sr (,(noi '>=) ((ast_name ,_sr ,_4 ()),_10)))
-          ,(string-append "break_" _1)
-        ))
-        `(,_11)
-        `((ast_label ,_sr ,(string-append "continue_" _1)))
-        `((ast_unlikely_ifgoto ,_sr
-          (ast_apply ,_sr (,(noi '==) ((ast_name ,_sr ,_4 ()),_10)))
+          (ast_apply ,_sr (,(noi '>) ((ast_name ,_sr ,_4 ()),_10)))
           ,(string-append "break_" _1)
         ))
         `((ast_call ,_sr ,(noi 'pre_decr) (ast_ref ,_sr (ast_name ,_sr ,_4()))))
+        `(,_11)
+        `((ast_label ,_sr ,(string-append "continue_" _1)))
         `((ast_goto ,_sr ,(string-append "redo_" _1)))
         `((ast_label ,_sr ,(string-append "break_" _1)))
        ))
@@ -3299,18 +3287,15 @@ syntax loops
     `(ast_seq ,_sr
       ,(append 
         `((ast_var_decl ,_sr ,_4 ,dfltvs none (some ,_6)))
+        `((ast_call ,_sr ,(noi 'pre_incr) (ast_ref ,_sr (ast_name ,_sr ,_4()))))
         `((ast_label ,_sr ,(string-append "redo_" _1)))
         `((ast_unlikely_ifnotgoto ,_sr
-          (ast_apply ,_sr (,(noi '>=) ((ast_name ,_sr ,_4 ()),_8)))
-          ,(string-append "break_" _1)
-        ))
-        `(,_9)
-        `((ast_label ,_sr ,(string-append "continue_" _1)))
-        `((ast_unlikely_ifgoto ,_sr
-          (ast_apply ,_sr (,(noi '==) ((ast_name ,_sr ,_4 ()),_8)))
+          (ast_apply ,_sr (,(noi '>) ((ast_name ,_sr ,_4 ()) ,_8)))
           ,(string-append "break_" _1)
         ))
         `((ast_call ,_sr ,(noi 'pre_decr) (ast_ref ,_sr (ast_name ,_sr ,_4()))))
+        `(,_9)
+        `((ast_label ,_sr ,(string-append "continue_" _1)))
         `((ast_goto ,_sr ,(string-append "redo_" _1)))
         `((ast_label ,_sr ,(string-append "break_" _1)))
        ))
@@ -3662,7 +3647,10 @@ syntax patterns {
   //$ The RHS is the rest of the tuple.
   private stuple_cons_pattern := stuple_pattern ",," stuple_cons_pattern =>#
     "`(pat_tuple_cons ,_sr ,_1 ,_3)";
+  private stuple_cons_pattern := stuple_pattern "<,,>" stuple_cons_pattern =>#
+    "`(pat_tuple_snoc ,_sr ,_1 ,_3)";
   private stuple_cons_pattern := stuple_pattern =># "_1";
+
 
   //$ Match a tuple with 2 or more components.
   private stuple_pattern := scoercive_pattern ("," scoercive_pattern )* =>#
@@ -4828,6 +4816,7 @@ syntax type_decls {
 
   // shared by both union decl forms..
     stype_sum_item := sname sopt_value stvarlist "of" sexpr =># "`(,_1 ,_2 ,_3 ,_5)";
+    stype_sum_item := sname sopt_value stvarlist "of" sexpr "=>" sexpr =># "`(,_1 ,_2 ,_3 ,_5 ,_7)";
     stype_sum_item := sname sopt_value stvarlist =># "`(,_1 ,_2 ,_3 (ast_void ,_sr))";
     stype_sum_item := "#" sname sopt_value stvarlist =># "`(,_2 ,_3 ,_4 (ast_void ,_sr))";
 

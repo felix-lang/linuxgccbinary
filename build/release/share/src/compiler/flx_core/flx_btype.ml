@@ -21,6 +21,7 @@ and t =
   | BTYP_sum of t list
   | BTYP_unitsum of int
   | BTYP_intersect of t list (** intersection type *)
+  | BTYP_union of t list (** intersection type *)
   | BTYP_inst of bid_t * t list
   | BTYP_tuple of t list
   | BTYP_array of t * t
@@ -34,15 +35,24 @@ and t =
   | BTYP_void
   | BTYP_label (* type of a label *)
   | BTYP_fix of int * t (* meta type *)
+  | BTYP_rev of t
 
   | BTYP_type of int
   | BTYP_type_tuple of t list
   | BTYP_type_function of (bid_t * t) list * t * t
   | BTYP_type_var of bid_t * t
   | BTYP_type_apply of t * t
+
+  (* type_map is NOT a map over a kind, the argument should
+     be a tuple type, and the result is a tuple type
+     that is, the argument is NOT a type_tuple (which is 
+     list of types) but an actual product type.
+  *)
+  | BTYP_type_map of t * t
   | BTYP_type_match of t * (btpattern_t * t) list
 
   | BTYP_tuple_cons of t * t 
+  | BTYP_tuple_snoc of t * t 
 
   (* type sets *)
   | BTYP_type_set of t list (** open union *)
@@ -56,7 +66,24 @@ type overload_result =
  (bid_t * t) list * (* mgu *)
  t list (* ts *)
 
+let rec trivorder t = match t with
+  | BTYP_tuple [] -> Some 0
+  | BTYP_pointer t -> 
+    begin match trivorder t with
+    | Some k -> Some (k + 1)
+    | None -> None
+    end
+  | _ -> None
 
+let rec istriv t =
+  match trivorder t with
+  | None -> false
+  | Some _ -> true
+
+let rec trivtype i = match i with
+  | 0 -> BTYP_tuple []
+  | _ -> BTYP_pointer (trivtype (i - 1))
+  
 let catmap sep f ls = String.concat sep (List.map f ls) 
 
 let rec str_of_btype typ = 
@@ -69,6 +96,7 @@ let rec str_of_btype typ =
   | BTYP_sum ts -> "BTYP_sum(" ^ ss ts ^")"
   | BTYP_unitsum n -> string_of_int n
   | BTYP_intersect ts -> "BTYP_intersect(" ^ ss ts ^ ")"
+  | BTYP_union ts -> "BTYP_union (" ^ ss ts ^ ")"
   | BTYP_inst (i,ts) -> "BTYP_inst("^string_of_int i^"["^ss ts^"])"
   | BTYP_tuple ts -> "BTYP_tuple(" ^ ss ts ^ ")"
   | BTYP_array (b,x) -> "BTYP_array(" ^ s b ^"," ^s x^")"
@@ -79,7 +107,8 @@ let rec str_of_btype typ =
   | BTYP_function (d,c) -> "BTYP_function(" ^ s d ^ " -> " ^ s c ^")"
   | BTYP_cfunction (d,c) -> "BTYP_cfunction(" ^ s d ^ " --> " ^ s c ^")"
   | BTYP_effector (d,e,c) -> "BTYP_effector(" ^ s d ^ " ->["^s e^"] " ^ s c ^")"
- 
+  | BTYP_rev t -> "BTYP_rev("^ s t ^")" 
+
   | BTYP_void -> "BTYP_void"
   | BTYP_label -> "BTYP_label" (* type of a label *)
   | BTYP_fix (i,t) -> "BTYP_fix("^string_of_int i ^ ":" ^ s t ^")"
@@ -93,8 +122,10 @@ let rec str_of_btype typ =
   | BTYP_type_var (i,t) -> "BTYP_type_var("^string_of_int i^":"^s t^")"
   | BTYP_type_apply (f,x) -> "BTYP_type_apply("^s f^","^s x^ ")"
   | BTYP_type_match (v,pats) -> "BTYP_type_match(too lazy)"
+  | BTYP_type_map (f,t) -> "BTYP_type_map(" ^ s f ^"," ^s t^")"
 
   | BTYP_tuple_cons (h,t) -> "BTYP_tuple_cons (" ^ s h ^"**" ^ s t^")"
+  | BTYP_tuple_snoc (h,t) -> "BTYP_tuple_snoc (" ^ s h ^"<**>" ^ s t^")"
 
   (* type sets *)
   | BTYP_type_set ts -> "BTYP_type_set(" ^ss ts^ ")"
@@ -162,10 +193,13 @@ let complete_type t =
     | BTYP_fix (i,_) when (-i) = depth -> ()
     | BTYP_fix (i,_) when (-i) > depth -> raise (Free_fixpoint t')
     | BTYP_type_apply (a,b) -> uf a;uf b
+    | BTYP_type_map (a,b) -> uf a;uf b
     | BTYP_inst (i,ts) -> List.iter uf ts
     | BTYP_type_function (p,r,b) ->
         uf b
-  
+ 
+    | BTYP_rev t -> uf t
+ 
     | BTYP_type_match (a,tts) ->
         uf a;
         List.iter (fun (p,x) -> uf x) tts
@@ -194,6 +228,9 @@ let btyp_unit () =
 let btyp_bool () = 
   BTYP_unitsum 2
 
+let btyp_any () =
+  BTYP_fix (0, BTYP_type 0)
+
 (** Construct a BTYP_sum type. *)
 let btyp_sum ts =
   match ts with 
@@ -213,8 +250,28 @@ let btyp_unitsum n =
   | _ ->  BTYP_unitsum n
 
 (** Construct a BTYP_intersect type. *)
-let btyp_intersect ts =
-  BTYP_intersect ts
+let btyp_intersect ls =
+  let void_t = btyp_void () in
+  let any_t = btyp_any () in
+  if List.mem void_t ls then void_t
+  else let ls = List.filter (fun i -> i <> any_t) ls in
+  let ls = Flx_list.uniq_list ls in (* mandatory for type constraints to work *)
+  match ls with
+  | [] -> any_t
+  | [t] -> t
+  | ls -> BTYP_intersect ls
+
+(** Construct a BTYP_intersect type. *)
+let btyp_union ls =
+  let void_t = btyp_void () in
+  let any_t = btyp_any () in
+  if List.mem any_t ls then any_t 
+  else let ls = List.filter (fun i -> i <> void_t ) ls in
+  let ls = Flx_list.uniq_list ls in 
+  match ls with
+  | [] -> void_t
+  | [t] -> t
+  | ls -> BTYP_union ls
 
 let btyp_inst (bid, ts) =
   BTYP_inst (bid, ts)
@@ -222,7 +279,7 @@ let btyp_inst (bid, ts) =
 (** Construct a BTYP_tuple type. *)
 let btyp_tuple ts = 
   match ts with
-  | [] -> BTYP_tuple []
+  | [] -> btyp_unit () 
   | [t] -> t
   | (head :: tail) as ts ->
       (* If all the types are the same, reduce the type to a BTYP_array. *)
@@ -232,10 +289,22 @@ let btyp_tuple ts =
       with Not_found ->
         BTYP_tuple ts
 
+let btyp_rev t =
+  match t with
+  | BTYP_tuple ts -> btyp_tuple (List.rev ts)
+  | BTYP_array _ -> t
+  | _ -> BTYP_rev t
+
 let btyp_tuple_cons head tail = 
   match tail with
   | BTYP_tuple ts -> btyp_tuple (head::ts)
   | _ -> BTYP_tuple_cons (head,tail)
+
+let btyp_tuple_snoc body last = 
+  match body with
+  | BTYP_tuple ts -> btyp_tuple (ts@[last])
+  | _ -> BTYP_tuple_snoc (body,last)
+
 
 (** Construct a BTYP_array type. *)
 let btyp_array (t, n) =
@@ -328,6 +397,9 @@ let btyp_type_var (bid, t) =
 let btyp_type_apply (f, a) =
   BTYP_type_apply (f, a)
 
+let btyp_type_map (f,a) =
+  BTYP_type_map (f,a)
+
 (** Construct a BTYP_type_match type. *)
 let btyp_type_match (t, ps) =
   BTYP_type_match (t, ps)
@@ -366,6 +438,7 @@ let unfold msg t =
 *)
         raise (Free_fixpoint t')
     | BTYP_type_apply (a,b) -> btyp_type_apply (uf a,uf b)
+    | BTYP_type_map (a,b) -> btyp_type_map (uf a,uf b)
     | BTYP_inst (i,ts) -> btyp_inst (i,List.map uf ts)
     | BTYP_type_function (p,r,b) ->
         btyp_type_function (p,r,uf b)
@@ -456,6 +529,7 @@ let flat_iter
       let unitrep = BTYP_tuple [] in
       for i = 1 to k do f_btype unitrep done
   | BTYP_intersect ts -> List.iter f_btype ts
+  | BTYP_union ts -> List.iter f_btype ts
   | BTYP_inst (i,ts) -> f_bid i; List.iter f_btype ts
   | BTYP_tuple ts -> List.iter f_btype ts
   | BTYP_array (t1,t2)->  f_btype t1; f_btype t2
@@ -466,10 +540,12 @@ let flat_iter
   | BTYP_function (a,b) -> f_btype a; f_btype b
   | BTYP_effector (a,e,b) -> f_btype a; f_btype e; f_btype b
   | BTYP_cfunction (a,b) -> f_btype a; f_btype b
+  | BTYP_rev t -> f_btype t
   | BTYP_void -> ()
   | BTYP_fix _ -> ()
   | BTYP_type _ -> ()
   | BTYP_tuple_cons (a,b) -> f_btype a; f_btype b
+  | BTYP_tuple_snoc (a,b) -> f_btype a; f_btype b
   | BTYP_type_tuple ts -> List.iter f_btype ts
   | BTYP_type_function (its, a, b) ->
       (* The first argument of [its] is an index, not a bid. *)
@@ -481,6 +557,7 @@ let flat_iter
        * bid. *)
       f_btype t
   | BTYP_type_apply (a,b) -> f_btype a; f_btype b
+  | BTYP_type_map (a,b) -> f_btype a; f_btype b
   | BTYP_type_match (t,ps) ->
       f_btype t;
       List.iter begin fun (tp, t) ->
@@ -519,6 +596,7 @@ let map ?(f_bid=fun i -> i) ?(f_btype=fun t -> t) = function
     | _ -> BTYP_sum (Flx_list.repeat mapped_unit k)
     end
   | BTYP_intersect ts -> btyp_intersect (List.map f_btype ts)
+  | BTYP_union ts -> btyp_union (List.map f_btype ts)
   | BTYP_inst (i,ts) -> btyp_inst (f_bid i, List.map f_btype ts)
   | BTYP_tuple ts -> btyp_tuple (List.map f_btype ts)
   | BTYP_array (t1,t2) -> btyp_array (f_btype t1, f_btype t2)
@@ -529,15 +607,18 @@ let map ?(f_bid=fun i -> i) ?(f_btype=fun t -> t) = function
   | BTYP_function (a,b) -> btyp_function (f_btype a, f_btype b)
   | BTYP_effector (a,e,b) -> btyp_effector (f_btype a, f_btype e, f_btype b)
   | BTYP_cfunction (a,b) -> btyp_cfunction (f_btype a, f_btype b)
+  | BTYP_rev t -> btyp_rev (f_btype t)
   | BTYP_void as x -> x
   | BTYP_fix _ as x -> x
   | BTYP_tuple_cons (a,b) -> btyp_tuple_cons (f_btype a) (f_btype b)
+  | BTYP_tuple_snoc (a,b) -> btyp_tuple_snoc (f_btype a) (f_btype b)
   | BTYP_type _ as x -> x
   | BTYP_type_tuple ts -> btyp_type_tuple (List.map f_btype ts)
   | BTYP_type_function (its, a, b) ->
       btyp_type_function (List.map (fun (i,t) -> f_bid i, f_btype t) its, f_btype a, f_btype b)
   | BTYP_type_var (i,t) -> btyp_type_var (f_bid i, f_btype t)
   | BTYP_type_apply (a, b) -> btyp_type_apply (f_btype a, f_btype b)
+  | BTYP_type_map (a, b) -> btyp_type_map (f_btype a, f_btype b)
   | BTYP_type_match (t,ps) ->
       let ps =
         List.map begin fun (tp, t) ->
