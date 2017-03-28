@@ -1,4 +1,4 @@
-#line 1779 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
+#line 1797 "/home/travis/build/felix-lang/felix/src/packages/grammar.fdoc"
 //$ General functional forms.
 syntax functions {
   requires expressions;

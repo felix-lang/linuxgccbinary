@@ -1,4 +1,4 @@
-#line 1396 "/home/travis/build/felix-lang/felix/src/packages/rtl.fdoc"
+#line 1425 "/home/travis/build/felix-lang/felix/src/packages/rtl.fdoc"
 #ifndef __FLX_RTL_CONFIG_H__
 #define __FLX_RTL_CONFIG_H__
 
