@@ -1,4 +1,4 @@
-#line 1318 "/home/travis/build/felix-lang/felix/src/packages/rtl-threads.fdoc"
+#line 1327 "/home/travis/build/felix-lang/felix/src/packages/rtl-threads.fdoc"
 // simple very efficient lock free bag
 #include <atomic>
 #include <chrono>

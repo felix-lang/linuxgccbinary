@@ -1,4 +1,4 @@
-#line 1039 "/home/travis/build/felix-lang/felix/src/packages/embed.fdoc"
+#line 1048 "/home/travis/build/felix-lang/felix/src/packages/embed.fdoc"
 #include "flx_async.hpp"
 #include "pthread_bound_queue.hpp"
 #include "flx_rtl.hpp"

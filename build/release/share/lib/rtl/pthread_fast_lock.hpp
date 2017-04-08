@@ -1,4 +1,4 @@
-#line 1772 "/home/travis/build/felix-lang/felix/src/packages/rtl-threads.fdoc"
+#line 1781 "/home/travis/build/felix-lang/felix/src/packages/rtl-threads.fdoc"
 #ifndef __pthread_fast_lock__
 #define __pthread_fast_lock__
 #include "flx_pthread_config.hpp"

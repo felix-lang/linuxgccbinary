@@ -1,4 +1,4 @@
-#line 725 "/home/travis/build/felix-lang/felix/src/packages/embed.fdoc"
+#line 734 "/home/travis/build/felix-lang/felix/src/packages/embed.fdoc"
 
 
 #include "flx_world.hpp"

@@ -1,4 +1,4 @@
-#line 1352 "/home/travis/build/felix-lang/felix/src/packages/rtl.fdoc"
+#line 1353 "/home/travis/build/felix-lang/felix/src/packages/rtl.fdoc"
 #define STAT "/proc/stat"
 #include <stdio.h>
 #include <errno.h>

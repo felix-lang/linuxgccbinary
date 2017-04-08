@@ -1,4 +1,4 @@
-#line 949 "/home/travis/build/felix-lang/felix/src/packages/rtl-threads.fdoc"
+#line 958 "/home/travis/build/felix-lang/felix/src/packages/rtl-threads.fdoc"
 #include "pthread_thread.hpp"
 #include <stdio.h>
 #include <cstdlib>

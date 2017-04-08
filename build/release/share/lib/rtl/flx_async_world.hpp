@@ -1,4 +1,4 @@
-#line 666 "/home/travis/build/felix-lang/felix/src/packages/embed.fdoc"
+#line 675 "/home/travis/build/felix-lang/felix/src/packages/embed.fdoc"
 
 #ifndef __flx_async_world_H_
 #define __flx_async_world_H_

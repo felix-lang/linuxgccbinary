@@ -1,4 +1,4 @@
-#line 2082 "/home/travis/build/felix-lang/felix/src/packages/gc.fdoc"
+#line 2231 "/home/travis/build/felix-lang/felix/src/packages/gc.fdoc"
 class Collector
 {
   open Rtti;
