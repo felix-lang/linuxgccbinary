@@ -1,4 +1,4 @@
-#line 973 "/home/travis/build/felix-lang/felix/src/packages/gc.fdoc"
+#line 998 "/home/travis/build/felix-lang/felix/src/packages/gc.fdoc"
 
 #include <cstdlib>
 #include <map>

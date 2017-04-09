@@ -1,4 +1,4 @@
-#line 778 "/home/travis/build/felix-lang/felix/src/packages/gc.fdoc"
+#line 803 "/home/travis/build/felix-lang/felix/src/packages/gc.fdoc"
 
 #ifndef __FLX_COLLECTOR_H__
 #define __FLX_COLLECTOR_H__
