@@ -1,4 +1,4 @@
-#line 2091 "/home/travis/build/felix-lang/felix/src/packages/gc.fdoc"
+#line 2114 "/home/travis/build/felix-lang/felix/src/packages/gc.fdoc"
 class Rtti {
 
   //$ The type of the collector.

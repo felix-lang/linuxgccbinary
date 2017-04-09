@@ -1,4 +1,4 @@
-#line 2049 "/home/travis/build/felix-lang/felix/src/packages/gc.fdoc"
+#line 2072 "/home/travis/build/felix-lang/felix/src/packages/gc.fdoc"
 
 //$ Generic garbage collector interface.
 //$ This class provides a generic interface to the GC,
